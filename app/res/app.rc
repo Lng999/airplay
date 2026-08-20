@@ -1,0 +1,42 @@
+// app.rc - resources for airplay-gui.
+// The manifest is embedded as RT_MANIFEST id 1 (CREATEPROCESS_MANIFEST_RESOURCE_ID),
+// which is what gives us Common Controls v6, Per-Monitor V2 DPI and asInvoker.
+#include <windows.h>
+
+#ifndef RT_MANIFEST
+#define RT_MANIFEST 24
+#endif
+#ifndef CREATEPROCESS_MANIFEST_RESOURCE_ID
+#define CREATEPROCESS_MANIFEST_RESOURCE_ID 1
+#endif
+
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "app.manifest"
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION    0,2,0,0
+ PRODUCTVERSION 0,2,0,0
+ FILEFLAGSMASK  VS_FFI_FILEFLAGSMASK
+ FILEFLAGS      0
+ FILEOS         VOS_NT_WINDOWS32
+ FILETYPE       VFT_APP
+ FILESUBTYPE    VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName",      "airplay"
+            VALUE "FileDescription",  "Windows AirPlay Receiver (UxPlay front-end)"
+            VALUE "FileVersion",      "0.2.0.0"
+            VALUE "InternalName",     "airplay-gui"
+            VALUE "LegalCopyright",   "GPLv3 - see LICENSE"
+            VALUE "OriginalFilename", "airplay-gui.exe"
+            VALUE "ProductName",      "airplay"
+            VALUE "ProductVersion",   "0.2.0.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
