@@ -1,0 +1,17 @@
+From: airplay project
+Subject: [PATCH] uxplay: handle CTRL_BREAK_EVENT in CtrlHandler so GUI hosts can stop cleanly
+
+A parent that created the child with CREATE_NEW_PROCESS_GROUP (which disables CTRL_C for
+the group) can only deliver CTRL_BREAK. Without this case CtrlHandler returns FALSE,
+Windows kills the process and cleanup() (mDNS goodbye, GStreamer teardown) never runs.
+---
+--- a/uxplay.cpp
++++ b/uxplay.cpp
+@@ -588,6 +588,7 @@
+ static BOOL WINAPI CtrlHandler(DWORD signal) {
+     switch (signal) {
+     case CTRL_C_EVENT:
++    case CTRL_BREAK_EVENT:   /* GUI hosts send this to a CREATE_NEW_PROCESS_GROUP child; must run cleanup() */
+     case CTRL_CLOSE_EVENT:
+     case CTRL_SHUTDOWN_EVENT:
+         if (gmainloop) {
