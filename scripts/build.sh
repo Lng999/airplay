@@ -36,6 +36,24 @@ elif [ -n "${1:-}" ]; then
     die "unknown argument '${1}' (only 'clean' is supported)"
 fi
 
+# --- apply local patches to the submodule (idempotent) -----------------------
+# patches/*.patch are kept out of the submodule; see patches/README.md.
+# Already-applied patches are detected via `git apply --reverse --check`.
+apply_patches() {
+    local p name
+    for p in "${REPO_ROOT}"/patches/*.patch; do
+        [ -e "$p" ] || continue
+        name="$(basename "$p")"
+        if git -C "${SRC_DIR}" apply --reverse --check "$p" >/dev/null 2>&1; then
+            echo "patch ${name}: already applied"
+        elif git -C "${SRC_DIR}" apply --check "$p" >/dev/null 2>&1; then
+            git -C "${SRC_DIR}" apply "$p" && echo "patch ${name}: applied"
+        else
+            die "patch ${name} does not apply cleanly to third_party/UxPlay (submodule pin changed?)"
+        fi
+    done
+}
+
 # --- environment sanity -----------------------------------------------------
 if [ "${MSYSTEM:-}" != "UCRT64" ]; then
     # MINGW64 was deprecated on 2026-03-15 (research doc 1.3); UCRT64 is the decision.
@@ -53,6 +71,9 @@ done
 "UxPlay sources missing: ${SRC_DIR}/CMakeLists.txt not found.
        The submodule is not checked out. From the repo root run:
            git submodule update --init"
+
+step "Applying local patches (patches/*.patch)"
+apply_patches
 
 # --- configure --------------------------------------------------------------
 CMAKE_ARGS=(
