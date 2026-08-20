@@ -1,0 +1,87 @@
+#include "tray.h"
+
+#include <shellapi.h>
+
+#include <cstring>
+
+namespace ui {
+namespace {
+
+void fillNid(NOTIFYICONDATAW& nid, HWND owner, UINT callbackMsg, const std::wstring& tip) {
+    ZeroMemory(&nid, sizeof(nid));
+    nid.cbSize           = sizeof(nid);
+    nid.hWnd             = owner;
+    nid.uID              = Tray::kIconId;
+    nid.uFlags           = NIF_MESSAGE | NIF_ICON | NIF_TIP;
+    nid.uCallbackMessage = callbackMsg;
+    // Phase 3 will ship a real .ico; IDI_APPLICATION is the documented placeholder.
+    nid.hIcon            = LoadIconW(nullptr, IDI_APPLICATION);
+    lstrcpynW(nid.szTip, tip.c_str(), static_cast<int>(ARRAYSIZE(nid.szTip)));
+}
+
+} // namespace
+
+Tray::~Tray() { remove(); }
+
+bool Tray::add(HWND owner, UINT callbackMsg) {
+    owner_       = owner;
+    callbackMsg_ = callbackMsg;
+
+    NOTIFYICONDATAW nid;
+    fillNid(nid, owner_, callbackMsg_, tip_);
+    added_ = Shell_NotifyIconW(NIM_ADD, &nid) != FALSE;
+    return added_;
+}
+
+void Tray::readd() {
+    if (!owner_) return;
+    added_ = false;
+    add(owner_, callbackMsg_);
+}
+
+void Tray::remove() {
+    if (!added_ || !owner_) return;
+    NOTIFYICONDATAW nid;
+    ZeroMemory(&nid, sizeof(nid));
+    nid.cbSize = sizeof(nid);
+    nid.hWnd   = owner_;
+    nid.uID    = kIconId;
+    Shell_NotifyIconW(NIM_DELETE, &nid);
+    added_ = false;
+}
+
+void Tray::setTip(const std::wstring& tip) {
+    tip_ = tip.size() < 127 ? tip : tip.substr(0, 126);
+    if (!added_ || !owner_) return;
+    NOTIFYICONDATAW nid;
+    fillNid(nid, owner_, callbackMsg_, tip_);
+    nid.uFlags = NIF_TIP;
+    Shell_NotifyIconW(NIM_MODIFY, &nid);
+}
+
+int Tray::trackMenu(HWND owner, bool running) const {
+    HMENU menu = CreatePopupMenu();
+    if (!menu) return kTrayNone;
+
+    AppendMenuW(menu, MF_STRING, kTrayShow,  L"&Show");
+    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(menu, MF_STRING | (running ? MF_GRAYED : 0), kTrayStart, L"S&tart");
+    AppendMenuW(menu, MF_STRING | (running ? 0 : MF_GRAYED), kTrayStop,  L"St&op");
+    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(menu, MF_STRING, kTrayExit, L"E&xit");
+    SetMenuDefaultItem(menu, kTrayShow, FALSE);
+
+    POINT pt{};
+    GetCursorPos(&pt);
+    // Required so the menu closes when the user clicks elsewhere (KB135788).
+    SetForegroundWindow(owner);
+    int cmd = static_cast<int>(TrackPopupMenu(menu,
+                                              TPM_RETURNCMD | TPM_NONOTIFY |
+                                                  TPM_RIGHTBUTTON | TPM_LEFTALIGN,
+                                              pt.x, pt.y, 0, owner, nullptr));
+    PostMessageW(owner, WM_NULL, 0, 0);
+    DestroyMenu(menu);
+    return cmd;
+}
+
+} // namespace ui

@@ -1,0 +1,91 @@
+// main_window.h - the single top-level window of airplay-gui.
+//
+// Threading: UxplayHost invokes its callback on the reader thread. We never touch a HWND
+// from there; the callback allocates a copy of the HostEvent and PostMessageW's it as
+// WM_HOST_EVENT, and the window procedure takes ownership and deletes it.
+#pragma once
+
+#include <string>
+
+#include "config_store.h"
+#include "tray.h"
+#include "ui_log.h"
+
+namespace ui {
+
+class MainWindow {
+public:
+    static constexpr UINT WM_HOST_EVENT = WM_APP + 1;   // lParam = airplay::HostEvent* (owned)
+    static constexpr UINT WM_TRAY       = WM_APP + 2;   // shell notification-area callback
+
+    MainWindow(HINSTANCE hinst, ConfigStore& store, AppConfig& cfg);
+    ~MainWindow();
+    MainWindow(const MainWindow&) = delete;
+    MainWindow& operator=(const MainWindow&) = delete;
+
+    bool create();
+    void show(bool minimizedToTray);
+    HWND hwnd() const { return hwnd_; }
+
+    // Same effect as pressing Start (used by [app] autostart_receiver and -autostart).
+    void startReceiver();
+
+private:
+    static LRESULT CALLBACK wndProcThunk(HWND, UINT, WPARAM, LPARAM);
+    LRESULT wndProc(UINT msg, WPARAM wp, LPARAM lp);
+
+    void createControls();
+    void createFonts();
+    void layout();
+    void controlsFromConfig();
+    void configFromControls();
+
+    void onHostEvent(const airplay::HostEvent& ev);
+    void onCommand(int id, int code);
+
+    void doStart();
+    void doStop();
+    void doCopyCmdline();
+    void doExit();
+
+    void updateStatus();
+    void updateButtons();
+    void applyAlwaysOnTop();
+    void saveWindowRect();
+    void logUi(const std::wstring& line);
+
+    int  s(int logical) const { return MulDiv(logical, dpi_, 96); }
+
+    HINSTANCE    hinst_ = nullptr;
+    ConfigStore& store_;
+    AppConfig&   cfg_;
+
+    HWND hwnd_ = nullptr;
+    HWND status_ = nullptr, resolution_ = nullptr;
+    HWND lblName_ = nullptr, editName_ = nullptr;
+    HWND lblPort_ = nullptr, editPort_ = nullptr;
+    HWND lblVideo_ = nullptr, cmbVideo_ = nullptr;
+    HWND lblAudio_ = nullptr, cmbAudio_ = nullptr;
+    HWND chkFullscreen_ = nullptr, chkH265_ = nullptr, chkDebug_ = nullptr;
+    HWND chkAlwaysOnTop_ = nullptr, chkAutostart_ = nullptr;
+    HWND btnStart_ = nullptr, btnStop_ = nullptr, btnCopy_ = nullptr;
+    HWND listLog_ = nullptr;
+
+    HFONT fontUi_ = nullptr, fontStatus_ = nullptr;
+    int   dpi_ = 96;
+
+    airplay::UxplayHost host_;
+    UiLog log_;
+    Tray  tray_;
+
+    airplay::HostState state_ = airplay::HostState::Stopped;
+    std::wstring clientName_, clientModel_, lastError_, ipv4_;
+    bool  haveResolution_ = false;
+    bool  exiting_        = false;
+    UINT  taskbarCreated_ = 0;
+};
+
+// First "up", non-loopback IPv4 unicast address (GetAdaptersAddresses). Empty if none.
+std::wstring firstLocalIPv4();
+
+} // namespace ui
