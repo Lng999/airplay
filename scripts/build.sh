@@ -44,10 +44,10 @@ apply_patches() {
     for p in "${REPO_ROOT}"/patches/*.patch; do
         [ -e "$p" ] || continue
         name="$(basename "$p")"
-        if git -C "${SRC_DIR}" apply --reverse --check "$p" >/dev/null 2>&1; then
+        if git -C "${SRC_DIR}" -c core.autocrlf=true apply --reverse --check --ignore-whitespace "$p" >/dev/null 2>&1; then
             echo "patch ${name}: already applied"
-        elif git -C "${SRC_DIR}" apply --check "$p" >/dev/null 2>&1; then
-            git -C "${SRC_DIR}" apply "$p" && echo "patch ${name}: applied"
+        elif git -C "${SRC_DIR}" -c core.autocrlf=true apply --check --ignore-whitespace "$p" >/dev/null 2>&1; then
+            git -C "${SRC_DIR}" -c core.autocrlf=true apply --ignore-whitespace "$p" && echo "patch ${name}: applied"
         else
             die "patch ${name} does not apply cleanly to third_party/UxPlay (submodule pin changed?)"
         fi
