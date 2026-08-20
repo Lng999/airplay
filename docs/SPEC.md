@@ -4,7 +4,7 @@ Kaynak: `docs/prompt-original.md`. Bu belge orijinal prompt'un *yorumlanmış ve
 Durum etiketleri: **[KARAR]** kesinleşti · **[AÇIK]** ajan verisi bekliyor · **[MANUEL]** iPhone ile elle doğrulanacak.
 
 ## 1. Hedef (değişmedi)
-iPhone 13 → Windows 10/11 PC, yerleşik AirPlay Screen Mirroring, Wi-Fi üzerinden. iOS kodu yok, Apple hesabı yok. mDNS ile ilan, oturum kabul, H.264 + AAC/ALAC decode & render.
+iPhone 13 → **Windows 10 Pro 22H2** PC (ortam envanteri: Win11 değil; Ryzen 5 5600, RTX 4060, Ethernet 192.168.1.107, ağ profili Private), yerleşik AirPlay Screen Mirroring, Wi-Fi üzerinden. iOS kodu yok, Apple hesabı yok. mDNS ile ilan, oturum kabul, H.264 + AAC/ALAC decode & render.
 
 ## 2. Orijinal prompt'a göre iyileştirmeler
 | # | Orijinal | İyileştirme | Gerekçe |
@@ -12,16 +12,26 @@ iPhone 13 → Windows 10/11 PC, yerleşik AirPlay Screen Mirroring, Wi-Fi üzeri
 | 1 | "Fork UxPlay" | UxPlay **pinned submodule** (`third_party/UxPlay`) + `patches/` dizini; kendi kodumuz `app/` altında ayrı | Upstream güncellemeleri kolay çekilir, diff küçük kalır, GPL sınırı net |
 | 2 | Phase 0 elle kurulum | `scripts/setup-msys2.ps1` + `scripts/build.sh` ile **tek komut** kurulum/build | Tekrarlanabilirlik; CI'da aynı betik koşar |
 | 3 | CI yok | GitHub Actions (`msys2/setup-msys2`) her commit'te build | "Her değişiklik commit" kuralı build kırılmasını hızlı yakalasın |
-| 4 | "Qt/SDL2/Win32 seç" | **[AÇIK]** Ön tercih Win32 + GStreamer `d3d11videosink` HWND embed (GstVideoOverlay) | Sıfır ek bağımlılık, MSYS2 runtime zaten var; Qt paket boyutunu katlar |
+| 4 | "Qt/SDL2/Win32 seç" | **[KARAR]** Win32 + GStreamer `d3d11videosink` HWND embed (GstVideoOverlay) | Sıfır ek bağımlılık, MSYS2 runtime zaten var; Qt paket boyutunu katlar; RTX 4060 var |
 | 5 | iPhone olmadan test yok | **iPhone'suz duman testi**: PC'den `_airplay._tcp` mDNS keşfi (python zeroconf / dns-sd), `gst-inspect` plugin kontrolü, `uxplay -d` debug çıktısı | Ajanlar cihazsız ilerleyebilsin |
 | 6 | Config belirsiz | `%APPDATA%\airplay\config.ini` (isim, port, sink, always-on-top, fullscreen, autostart) | Kalıcı ayar, Phase 3 "remember settings" baştan çözülür |
 | 7 | Log yok | Dosya logu `%LOCALAPPDATA%\airplay\logs\` + GUI'de son N satır | Hata ayıklama |
 | 8 | Paketleme belirsiz | Self-contained klasör (ntldd ile DLL toplama) + opsiyonel Inno Setup | MSYS2 olmayan makinede çalışsın |
 | 9 | DRM belirsiz | FairPlay/DRM video **kapsam dışı** (prompt'taki gibi), ayrıca HLS/YouTube cast de kapsam dışı | Net sınır |
 
+## 2b. Kaynak haritasından gelen sabit gerçekler (docs/research/uxplay-source-map.md)
+- Pin: `a3c19cbc` (2026-08-09, VERSION "1.74" `uxplay.cpp:75`; son tag v1.73.6 → HEAD yayınlanmamış). **Hash pinle, branch değil.**
+- Dahili mDNSResponder `lib/mdnsd/` Windows'ta **varsayılan**; Bonjour gerekmez. `-DUSE_DNS_SD=1` eski `dnssd.dll` yolu.
+- Features bitmask: `lib/dnssdint.h:32-34` tohum, **`uxplay.cpp:2001-2092` bit bit yeniden yazıyor** → DESIGN.md o bloğu alıntılar.
+- Handler tabloları: `lib/raop.c:406-444` (RTSP), `:445-478` (HTTP). Video pipeline `renderers/video_renderer.c:360-395`; varsayılan sink her platformda `autovideosink` (`uxplay.cpp:107`) → biz `d3d11videosink` geçeceğiz.
+- **Tuzak:** `HOME`/`XDG_CONFIG_HOMEDIR` yoksa Windows'ta kalıcı durum kaybolur (`uxplay.cpp:773-777`, `:3153-3162`) → launcher ayarlar.
+- Lisans: GPLv3 + `lib/playfair` "unclear" (README:2486-2489) → dağıtım yok, kişisel.
+- Build: `cmake -B build -G "Unix Makefiles"`/Ninja, paketler UCRT64: `mingw-w64-ucrt-x86_64-{cmake,gcc,openssl,libplist,gstreamer,gst-plugins-base,gst-plugins-good,gst-plugins-bad,gst-libav,pkg-config}` + `base-devel git`.
+- Ortam: MSYS2/GStreamer/pkg-config **yok**; VS 2026 var ama MinGW gerekli. UDP 5353'ü svchost+Spotify de dinliyor (paylaşımlı multicast, gotcha).
+
 ## 3. Fazlar
 ### Phase 0 — Kanıtla (custom kod yok)
-- [ ] `scripts/setup-msys2.ps1`: MSYS2 sessiz kurulum/var olanı kullan, pacman paketleri **[AÇIK: liste]**
+- [ ] `scripts/setup-msys2.ps1`: MSYS2 sessiz kurulum (winget/installer) + pacman paketleri (liste §2b)
 - [ ] `scripts/build.sh`: UxPlay'i `-DUSE_MDNS=1` ile derle → `build/uxplay.exe`
 - [ ] `scripts/smoke-test.ps1`: gst-inspect plugin kontrolü + mDNS ilan görünürlüğü
 - [ ] Firewall kuralları (UDP 5353 + UxPlay portları) **[AÇIK: port listesi]**
@@ -30,7 +40,7 @@ iPhone 13 → Windows 10/11 PC, yerleşik AirPlay Screen Mirroring, Wi-Fi üzeri
 
 ### Phase 1 — Anla
 - [ ] `docs/DESIGN.md`: handshake akışı (pair-setup/verify, GET /info, SETUP, /feedback, /audio), TXT kayıtları, portlar, features bitmask — hepsi `file:line` atıflı **[AÇIK: ajan haritası]**
-- [ ] Embed stratejisi kararı: lib/ doğrudan link vs uxplay.exe süreç sarmalama **[AÇIK]**
+- [x] **[KARAR]** Embed stratejisi (kaynak haritası §8): **Milestone 1 = `uxplay.exe`'yi child process olarak sar** (stdout parse, `-p`/`-n`/`-vs` argümanları). **Son hedef = kendi `uxplay_core`'umuz** `lib/` (`raop.h:125-144`, `dnssd.h:58-75` extern "C" API) + `renderers/` üstüne; `uxplay.cpp` monolitik (static'ler, `exit()`), olduğu gibi link edilemez.
 
 ### Phase 2 — Windows uygulaması
 - [ ] `app/` Win32 GUI: durum (waiting/connected), cihaz adı, çözünürlük, FPS, bitrate
