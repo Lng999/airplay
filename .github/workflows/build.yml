@@ -110,7 +110,6 @@ jobs:
   lint-scripts:
     name: lint scripts
     runs-on: ubuntu-latest
-    if: hashFiles('scripts/**') != ''
     steps:
       - name: Checkout
         uses: actions/checkout@v4
