@@ -5,13 +5,13 @@ Her satır: `[ ]` bekliyor · `[x] YYYY-MM-DD` doğrulandı · `[!]` başarısı
 
 ## Phase 0 — Upstream uxplay.exe (custom kod yok)
 - [x] 2026-08-20 `scripts/smoke-test.ps1` yeşil — 11 PASS / 0 FAIL (17 gst elementi, `uxplay.exe -v` 1.74, dahili mDNS `_airplay._tcp`+`_raop._tcp` ilanı aynı host'tan görüldü)
-- [!] 2026-08-20 iPhone Ekran Yansıtma listesinde **görünmedi** — PC Ethernet 192.168.1.107, sunucu ayakta; teşhis: ilan edilen A kaydı 127.0.0.1 → `patches/0001` uygulandı, 2026-08-21 yamalı build ilanı **192.168.1.107** (smoke 12 PASS). iPhone'da yeniden denenecek: [ ]
-- [ ] Oturum kuruluyor, uxplay penceresinde görüntü var (video)
-- [ ] Ses PC'den geliyor (audio)
+- [!] 2026-08-20 iPhone Ekran Yansıtma listesinde **görünmedi** — PC Ethernet 192.168.1.107, sunucu ayakta; teşhis: ilan edilen A kaydı 127.0.0.1 → `patches/0001` uygulandı, 2026-08-21 yamalı build ilanı **192.168.1.107** (smoke 12 PASS). iPhone'da yeniden denendi: **[x] 2026-08-21 görüldü**
+- [x] 2026-08-21 Oturum kuruldu, görüntü geldi (kullanıcı raporu: "sorunsuz çalıştı") — yamalı build (patches/0001+0002), `-vs d3d11videosink -as wasapi2sink`
+- [x] 2026-08-21 Ses geldi (kullanıcı raporu)
 - [ ] Döndürme (portrait↔landscape) düzgün
 - [ ] iPhone'dan "Yansıtmayı Durdur" → uxplay temiz şekilde beklemeye dönüyor, tekrar bağlanabiliyor
 - [ ] Gecikme kabul edilebilir (ms tahmini not edilsin)
-- Notlar: kullanılan mDNS modu (`USE_MDNS` dahili / `USE_DNS_SD`), video sink, ses sink, build tarihi
+- Notlar: dahili mDNS (lib/mdnsd + patches/0001), video `d3d11videosink`, ses `wasapi2sink`, build 2026-08-21, iPhone 13; PC Ethernet 192.168.1.107 ↔ iPhone Wi-Fi aynı modem
 
 ## Phase 2 — Kendi GUI'miz
 - [ ] GUI açılınca "waiting" durumu, bağlanınca "connected" + cihaz adı/çözünürlük/FPS
