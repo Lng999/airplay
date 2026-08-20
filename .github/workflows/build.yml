@@ -68,14 +68,11 @@ jobs:
           pkgconf --version
           pkg-config --modversion gstreamer-1.0
 
-      - name: Configure (CMake + Ninja)
-        run: |
-          cmake -S third_party/UxPlay -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DNO_MARCH_NATIVE=ON
-
-      - name: Build
-        run: cmake --build build
+      # scripts/build.sh applies patches/*.patch to the submodule (idempotently),
+      # then configures with -G Ninja -DCMAKE_BUILD_TYPE=Release -DNO_MARCH_NATIVE=ON
+      # and builds -- so CI tests exactly the patched tree that ships.
+      - name: Configure + Build (scripts/build.sh, applies patches/)
+        run: bash scripts/build.sh
 
       - name: Verify binary
         run: |
@@ -92,7 +89,10 @@ jobs:
         run: |
           mkdir -p dist/lib/gstreamer-1.0 dist/libexec/gstreamer-1.0
           cp build/uxplay.exe dist/
-          ntldd -R build/uxplay.exe | grep -i ucrt64 | awk '{print $3}' | sort -u | xargs -I{} cp {} dist/
+          # ntldd prints Windows paths with backslashes; xargs would eat them, so
+          # read line by line and convert with cygpath.
+          ntldd -R build/uxplay.exe | grep -i ucrt64 | awk '{print $3}' | sort -u | \
+            while IFS= read -r dll; do cp "$(cygpath -u "$dll")" dist/; done
           cp "$MINGW_PREFIX"/lib/gstreamer-1.0/*.dll dist/lib/gstreamer-1.0/
           cp "$MINGW_PREFIX"/libexec/gstreamer-1.0/gst-plugin-scanner.exe dist/libexec/gstreamer-1.0/
           echo "--- dist/ contents ---"
