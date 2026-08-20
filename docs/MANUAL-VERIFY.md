@@ -5,7 +5,7 @@ Her satır: `[ ]` bekliyor · `[x] YYYY-MM-DD` doğrulandı · `[!]` başarısı
 
 ## Phase 0 — Upstream uxplay.exe (custom kod yok)
 - [x] 2026-08-20 `scripts/smoke-test.ps1` yeşil — 11 PASS / 0 FAIL (17 gst elementi, `uxplay.exe -v` 1.74, dahili mDNS `_airplay._tcp`+`_raop._tcp` ilanı aynı host'tan görüldü)
-- [!] 2026-08-20 iPhone Ekran Yansıtma listesinde **görünmedi** — PC Ethernet 192.168.1.107, sunucu ayakta; teşhis: ilan edilen A kaydı 127.0.0.1 (patches/0001 bekleniyor)
+- [!] 2026-08-20 iPhone Ekran Yansıtma listesinde **görünmedi** — PC Ethernet 192.168.1.107, sunucu ayakta; teşhis: ilan edilen A kaydı 127.0.0.1 → `patches/0001` uygulandı, 2026-08-21 yamalı build ilanı **192.168.1.107** (smoke 12 PASS). iPhone'da yeniden denenecek: [ ]
 - [ ] Oturum kuruluyor, uxplay penceresinde görüntü var (video)
 - [ ] Ses PC'den geliyor (audio)
 - [ ] Döndürme (portrait↔landscape) düzgün
