@@ -4,7 +4,7 @@ Ajanlar bu adımları **yapamaz**; "çalışıyor" iddiası ancak bu liste elle 
 Her satır: `[ ]` bekliyor · `[x] YYYY-MM-DD` doğrulandı · `[!]` başarısız (not ekle).
 
 ## Phase 0 — Upstream uxplay.exe (custom kod yok)
-- [ ] `scripts/smoke-test.ps1` yeşil (gst-inspect plugin'leri, mDNS ilanı PC'den görünüyor)
+- [x] 2026-08-20 `scripts/smoke-test.ps1` yeşil — 11 PASS / 0 FAIL (17 gst elementi, `uxplay.exe -v` 1.74, dahili mDNS `_airplay._tcp`+`_raop._tcp` ilanı aynı host'tan görüldü)
 - [ ] iPhone Denetim Merkezi → Ekran Yansıtma listesinde PC adı görünüyor (keşif)
 - [ ] Oturum kuruluyor, uxplay penceresinde görüntü var (video)
 - [ ] Ses PC'den geliyor (audio)

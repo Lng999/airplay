@@ -40,10 +40,10 @@ iPhone 13 → **Windows 10 Pro 22H2** PC (ortam envanteri: Win11 değil; Ryzen 5
 
 ## 3. Fazlar
 ### Phase 0 — Kanıtla (custom kod yok)
-- [ ] `scripts/setup-msys2.ps1`: MSYS2 sessiz kurulum (winget/installer) + pacman paketleri (liste §2b)
-- [ ] `scripts/build.sh`: UxPlay'i varsayılan (dahili mDNS) ile derle → `build/uxplay.exe`; `-DUSE_DNS_SD=1` opsiyonel fallback
-- [ ] `scripts/smoke-test.ps1`: gst-inspect plugin kontrolü + mDNS ilan görünürlüğü
-- [ ] Firewall kuralları (UDP 5353 + UxPlay portları) **[AÇIK: port listesi]**
+- [x] `scripts/setup-msys2.ps1`: MSYS2 sessiz kurulum (winget/installer) + pacman paketleri (liste §2b)
+- [x] `scripts/build.sh`: UxPlay'i varsayılan (dahili mDNS) ile derle → `build/uxplay.exe`; `-DUSE_DNS_SD=1` opsiyonel fallback
+- [x] `scripts/smoke-test.ps1`: gst-inspect plugin kontrolü + mDNS ilan görünürlüğü
+- [x] Firewall kuralları `scripts/firewall-rules.ps1` (program-scoped + UDP 5353 + TCP 7000-7100 + UDP 6000-6001,7011 + `-p N..N+2`) — 2026-08-20 uygulandı
 - [ ] `docs/BUILD-NOTES.md`: tam komutlar, gotcha'lar
 - [ ] **[MANUEL]** iPhone → PC mirroring: video + ses + keşif
 
