@@ -6,3 +6,4 @@ build-*/
 *.user
 CMakeCache.txt
 CMakeFiles/
+.venv/
