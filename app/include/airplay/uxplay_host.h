@@ -39,7 +39,7 @@ struct HostEvent {
     std::string   clientName, clientModel, clientDeviceId;
     // Ports
     int udpPorts[3]{0,0,0}, tcpPorts[3]{0,0,0};
-    // Resolution (src = iPhone, plain = after scaling)
+    // Resolution (src = iPhone, plain = after scaling); source prints %f, values are rounded to int
     int srcWidth{0}, srcHeight{0}, width{0}, height{0};
 };
 
@@ -88,6 +88,9 @@ public:
     uint32_t  pid() const;           // 0 when stopped
 
     // Builds the exact argv that start() would use (for the UI's "command line" display and tests).
+    // Does NOT include argv[0] (the exe path); callers prepend cfg.uxplayExe if they need it.
+    // NOTE: stop() blocks the calling thread up to graceMs and temporarily detaches the caller's
+    // console (FreeConsole/AttachConsole trick); never call it from inside the event callback.
     static std::vector<std::wstring> buildArgs(const HostConfig& cfg);
 
 private:
