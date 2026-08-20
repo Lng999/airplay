@@ -52,13 +52,17 @@ iPhone 13 → **Windows 10 Pro 22H2** PC (ortam envanteri: Win11 değil; Ryzen 5
 - [x] **[KARAR]** Embed stratejisi (kaynak haritası §8): **Milestone 1 = `uxplay.exe`'yi child process olarak sar** (stdout parse, `-p`/`-n`/`-vs` argümanları). **Son hedef = kendi `uxplay_core`'umuz** `lib/` (`raop.h:125-144`, `dnssd.h:58-75` extern "C" API) + `renderers/` üstüne; `uxplay.cpp` monolitik (static'ler, `exit()`), olduğu gibi link edilemez.
 
 ### Phase 2 — Windows uygulaması
-- [ ] `app/` Win32 GUI: durum (waiting/connected), cihaz adı, çözünürlük, FPS, bitrate
-- [ ] Config, start/stop/reconnect, single-instance (named mutex), tray ikonu
-- [ ] Video HWND embed, aspect-ratio korumalı resize
+- [x] `app/` Win32 GUI **M1** (2026-08-20): durum (waiting/connected), cihaz adı, çözünürlük (sadece Debug ile); FPS/bitrate → M2. Canlı doğrulandı: Waiting @192.168.1.107, mDNS PASS, tray Exit child'ı da kapatıyor
+- [x] Config (`%APPDATA%irplay\config.ini`), start/stop, single-instance (named mutex), tray ikonu — M1
+- [ ] Video HWND embed, aspect-ratio korumalı resize → **M2** (`docs/PHASE2-SPEC.md`)
 
 ### Phase 3 — Cila + paket
 - [ ] Autostart (HKCU Run), ekran görüntüsü, log
 - [ ] Self-contained build + DLL listesi, opsiyonel installer
+
+### Phase 0 sonrası bulunan upstream kusurları (patches/)
+- `0001` **[AÇIK — RCA sürüyor]** dahili mDNS A kaydı 127.0.0.1 ilan ediyor → iPhone listede görmüyor (2026-08-20 gerçek iPhone testi: **görünmedi**). Kök neden + yama ajan tarafından hazırlanıyor.
+- `0002` `CtrlHandler` CTRL_BREAK'i işlemiyor → GUI'den durdurunca `cleanup()` koşmuyor (yama hazır, `git apply --check` OK; build.sh'a entegre edilecek).
 
 ## 4. Teslimatlar (bu geçiş)
 1. Phase 0 betikleri + BUILD-NOTES.md
