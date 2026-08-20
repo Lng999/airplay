@@ -1,0 +1,157 @@
+# CI for the airplay project (UxPlay-based Windows AirPlay receiver).
+#
+# Modeled on upstream UxPlay's own CI: third_party/UxPlay/.github/workflows/build.yml
+# ("build-windows-intel" job -> msys2/setup-msys2@v2, msystem UCRT64, shell: msys2 {0}).
+# Deviations from upstream, per docs/SPEC.md 2b/2c and docs/research/gstreamer-msys2-windows.md:
+#   * UCRT64 only (MINGW64 deprecated by MSYS2 on 2026-03-15).
+#   * Ninja generator instead of "Unix Makefiles".
+#   * gst-plugins-bad + gst-libav added (avdec_aac / avdec_alac / h264parse are required).
+#   * -DNO_MARCH_NATIVE=ON so CI-built binaries run on any x86-64 host
+#     (flag read at third_party/UxPlay/lib/CMakeLists.txt:6-10).
+#   * Internal mDNSResponder (lib/mdnsd) is the Windows default; no -DUSE_MDNS needed
+#     (third_party/UxPlay/CMakeLists.txt:51-66).
+name: build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-uxplay:
+    name: build uxplay (MSYS2 UCRT64)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # setup-msys2 v2 also supports the `pacboy:` shorthand (gcc:p, cmake:p, ...),
+      # but full package names are used here to match docs/SPEC.md 2c verbatim
+      # and upstream's own workflow.
+      - name: Set up MSYS2 (UCRT64)
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            git
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-openssl
+            mingw-w64-ucrt-x86_64-libplist
+            mingw-w64-ucrt-x86_64-gstreamer
+            mingw-w64-ucrt-x86_64-gst-plugins-base
+            mingw-w64-ucrt-x86_64-gst-plugins-good
+            mingw-w64-ucrt-x86_64-gst-plugins-bad
+            mingw-w64-ucrt-x86_64-gst-libav
+            mingw-w64-ucrt-x86_64-ntldd
+
+      - name: Toolchain info
+        run: |
+          uname -a
+          echo "MSYSTEM=$MSYSTEM  MINGW_PREFIX=$MINGW_PREFIX"
+          gcc --version | head -1
+          cmake --version | head -1
+          ninja --version
+          pkgconf --version
+          pkg-config --modversion gstreamer-1.0
+
+      - name: Configure (CMake + Ninja)
+        run: |
+          cmake -S third_party/UxPlay -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DNO_MARCH_NATIVE=ON
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Verify binary
+        run: |
+          ls -la build/uxplay.exe
+          # uxplay.cpp:1385-1387 -- "-v" prints the version and exit(0)s, it does not start the server.
+          ./build/uxplay.exe -v
+
+      # BEST-EFFORT BUNDLING (Phase 3 work is not done here):
+      # ntldd -R resolves only the direct/transitive deps of uxplay.exe itself.
+      # The GStreamer plugin DLLs copied below are NOT walked for their own
+      # transitive dependencies, so this dist/ is not yet guaranteed to run on a
+      # machine without MSYS2. Completing the closure is Phase 3.
+      - name: Bundle (best-effort)
+        run: |
+          mkdir -p dist/lib/gstreamer-1.0 dist/libexec/gstreamer-1.0
+          cp build/uxplay.exe dist/
+          ntldd -R build/uxplay.exe | grep -i ucrt64 | awk '{print $3}' | sort -u | xargs -I{} cp {} dist/
+          cp "$MINGW_PREFIX"/lib/gstreamer-1.0/*.dll dist/lib/gstreamer-1.0/
+          cp "$MINGW_PREFIX"/libexec/gstreamer-1.0/gst-plugin-scanner.exe dist/libexec/gstreamer-1.0/
+          echo "--- dist/ contents ---"
+          ls -la dist
+          du -sh dist
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: uxplay-win64-ucrt64
+          path: dist/
+          retention-days: 7
+          if-no-files-found: error
+
+  lint-scripts:
+    name: lint scripts
+    runs-on: ubuntu-latest
+    if: hashFiles('scripts/**') != ''
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: bash -n (syntax check .sh)
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=(scripts/*.sh)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "no .sh files under scripts/, skipping"
+            exit 0
+          fi
+          for f in "${files[@]}"; do
+            echo "checking $f"
+            bash -n "$f"
+          done
+
+      # NOTE: the built-in `pwsh` shell runs `pwsh -command ". '{0}'"` (no -NoProfile).
+      # A custom `shell:` string would change the temp-file extension away from .ps1,
+      # so the built-in one is used; ubuntu-latest has no PowerShell profile anyway.
+      - name: PowerShell parser check (.ps1)
+        shell: pwsh
+        run: |
+          $files = @(Get-ChildItem -Path 'scripts' -Filter '*.ps1' -Recurse -File -ErrorAction SilentlyContinue)
+          if ($files.Count -eq 0) {
+            Write-Host 'no .ps1 files under scripts/, skipping'
+            exit 0
+          }
+          $failed = $false
+          foreach ($f in $files) {
+            $errs = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errs)
+            if ($errs -and $errs.Count -gt 0) {
+              $failed = $true
+              Write-Host "::error file=$($f.FullName)::$($errs.Count) parse error(s)"
+              foreach ($e in $errs) {
+                Write-Host "  $($e.Extent.StartLineNumber):$($e.Extent.StartColumnNumber) $($e.Message)"
+              }
+            } else {
+              Write-Host "OK  $($f.FullName)"
+            }
+          }
+          if ($failed) { exit 1 }
