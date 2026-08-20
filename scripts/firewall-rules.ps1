@@ -122,7 +122,7 @@ $rules += @{
     DisplayName = "$Prefix AirPlay UDP legacy (inbound)"
     Direction   = 'Inbound'
     Protocol    = 'UDP'
-    LocalPort   = '6000-6001,7011'
+    LocalPort   = @('6000-6001', '7011')   # string[] - mixed 'range,port' in one string is rejected by New-NetFirewallRule
     Description = 'RAOP timing/control/audio UDP ports (legacy set 6000,6001,7011).'
 }
 
