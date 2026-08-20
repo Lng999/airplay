@@ -7,3 +7,5 @@ build-*/
 CMakeCache.txt
 CMakeFiles/
 .venv/
+build-host/
+build-app/
