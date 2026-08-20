@@ -45,7 +45,7 @@ iPhone 13 → **Windows 10 Pro 22H2** PC (ortam envanteri: Win11 değil; Ryzen 5
 - [x] `scripts/smoke-test.ps1`: gst-inspect plugin kontrolü + mDNS ilan görünürlüğü
 - [x] Firewall kuralları `scripts/firewall-rules.ps1` (program-scoped + UDP 5353 + TCP 7000-7100 + UDP 6000-6001,7011 + `-p N..N+2`) — 2026-08-20 uygulandı
 - [ ] `docs/BUILD-NOTES.md`: tam komutlar, gotcha'lar
-- [ ] **[MANUEL]** iPhone → PC mirroring: video + ses + keşif
+- [x] **[MANUEL ✓ 2026-08-21]** iPhone → PC mirroring: keşif + video + ses çalıştı (yamalı build)
 
 ### Phase 1 — Anla
 - [x] `docs/DESIGN.md` yazıldı (968 satır, ~400 atıf). Prompt düzeltmeleri: **`/audio` endpoint'i yok** (ses = UDP RTP, `SETUP` type 96); **`/fp-setup` düz mirroring'de zorunlu** (AES anahtarı FairPlay-şifreli gelir, `raop_handlers.h:800`); efektif varsayılan features **`0x527FFEE6,0x0`** (`dnssdint.h:33` yorumdaki değer); SPS/PPS ayrı gönderilmez, sonraki IDR'a eklenir; çözünürlük/features çıktısı sadece `-d` ile basılır → launcher `-d` açık başlatır.
@@ -61,8 +61,8 @@ iPhone 13 → **Windows 10 Pro 22H2** PC (ortam envanteri: Win11 değil; Ryzen 5
 - [ ] Self-contained build + DLL listesi, opsiyonel installer
 
 ### Phase 0 sonrası bulunan upstream kusurları (patches/)
-- `0001` **[AÇIK — RCA sürüyor]** dahili mDNS A kaydı 127.0.0.1 ilan ediyor → iPhone listede görmüyor (2026-08-20 gerçek iPhone testi: **görünmedi**). Kök neden + yama ajan tarafından hazırlanıyor.
-- `0002` `CtrlHandler` CTRL_BREAK'i işlemiyor → GUI'den durdurunca `cleanup()` koşmuyor (yama hazır, `git apply --check` OK; build.sh'a entegre edilecek).
+- `0001` **[KAPANDI]** dahili mDNS A kaydı 127.0.0.1 ilan ediyordu (`mdnsd.c:348-373`, multicast hedefe connect+getsockname; bkz. docs/research/mdnsd-windows-rca.md). Yama: GetAdaptersAddresses ile default-gateway adaptörü. 2026-08-21 iPhone ile doğrulandı. Upstream'e PR adayı.
+- `0002` `CtrlHandler` CTRL_BREAK'i işlemiyor → GUI'den durdurunca `cleanup()` koşmuyor. Yama uygulandı (build.sh otomatik uyguluyor).
 
 ## 4. Teslimatlar (bu geçiş)
 1. Phase 0 betikleri + BUILD-NOTES.md
