@@ -48,7 +48,7 @@ iPhone 13 → **Windows 10 Pro 22H2** PC (ortam envanteri: Win11 değil; Ryzen 5
 - [ ] **[MANUEL]** iPhone → PC mirroring: video + ses + keşif
 
 ### Phase 1 — Anla
-- [ ] `docs/DESIGN.md`: handshake akışı (pair-setup/verify, GET /info, SETUP, /feedback, /audio), TXT kayıtları, portlar, features bitmask — hepsi `file:line` atıflı **[AÇIK: ajan haritası]**
+- [x] `docs/DESIGN.md` yazıldı (968 satır, ~400 atıf). Prompt düzeltmeleri: **`/audio` endpoint'i yok** (ses = UDP RTP, `SETUP` type 96); **`/fp-setup` düz mirroring'de zorunlu** (AES anahtarı FairPlay-şifreli gelir, `raop_handlers.h:800`); efektif varsayılan features **`0x527FFEE6,0x0`** (`dnssdint.h:33` yorumdaki değer); SPS/PPS ayrı gönderilmez, sonraki IDR'a eklenir; çözünürlük/features çıktısı sadece `-d` ile basılır → launcher `-d` açık başlatır.
 - [x] **[KARAR]** Embed stratejisi (kaynak haritası §8): **Milestone 1 = `uxplay.exe`'yi child process olarak sar** (stdout parse, `-p`/`-n`/`-vs` argümanları). **Son hedef = kendi `uxplay_core`'umuz** `lib/` (`raop.h:125-144`, `dnssd.h:58-75` extern "C" API) + `renderers/` üstüne; `uxplay.cpp` monolitik (static'ler, `exit()`), olduğu gibi link edilemez.
 
 ### Phase 2 — Windows uygulaması
