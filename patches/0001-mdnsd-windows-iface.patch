@@ -1,0 +1,195 @@
+From: airplay RCA lane
+Subject: [PATCH] mdnsd: pick the real LAN interface on Windows instead of 127.0.0.1
+
+On Windows, connect()ing a UDP socket to the mDNS multicast group
+224.0.0.251 does not perform a route lookup: getsockname() reports
+127.0.0.1.  mdns_get_default_ipv4() (lib/mdnsd/mdnsd.c:348) relies on
+exactly that trick, so on Windows mdnsd->ipv4_addr becomes the loopback
+address.  That single bad value breaks discovery three ways:
+
+  * it is published as the host A record (mdnsd.c:246), so every remote
+    client is told the AirPlay server lives at 127.0.0.1;
+  * it is installed as IP_MULTICAST_IF (mdnsd.c:454-458), so announcements
+    are transmitted on the loopback interface only;
+  * it is used as the IP_ADD_MEMBERSHIP interface (mdnsd.c:473), so queries
+    arriving on the LAN interface are never delivered, even though the
+    socket is correctly bound to INADDR_ANY:5353.
+
+Ask the IP Helper API for the up, non-loopback, IPv4-enabled adapter that
+owns the default route (lowest interface metric wins among equals), and
+never fall back to a loopback address.
+
+Fixes: FDH2/UxPlay#546 (reopened symptom: service invisible to iOS)
+---
+--- a/lib/mdnsd/mdnsd.c
++++ b/lib/mdnsd/mdnsd.c
+@@ -23,6 +23,11 @@
+ #endif
+ 
+ #include "../compat.h"
++
++#ifdef WIN32
++/* iphlpapi.h must come after compat.h: it needs winsock2.h/windows.h first */
++#include <iphlpapi.h>
++#endif
+ #include "mdnsd.h"
+ 
+ #define MDNS_ADDR4 "224.0.0.251"
+@@ -345,6 +350,101 @@
+     return query_type == record_type || query_type == DNS_TYPE_ANY;
+ }
+ 
++#ifdef WIN32
++/*
++ * Windows does not perform a normal route lookup when a UDP socket is
++ * connect()ed to a multicast group: getsockname() then reports the loopback
++ * address 127.0.0.1 rather than the address of the outgoing interface.  The
++ * bogus address is fatal three times over -- it is published as the host A
++ * record, it is installed as IP_MULTICAST_IF, and it is used as the
++ * IP_ADD_MEMBERSHIP interface -- so announcements never leave the machine and
++ * queries from the LAN are never received.  Ask the IP Helper API for the
++ * interface that owns the default route instead.
++ */
++static uint32_t mdns_get_ipv4_from_adapters(void)
++{
++    IP_ADAPTER_ADDRESSES *adapters = NULL;
++    IP_ADAPTER_ADDRESSES *adapter;
++    ULONG size = 16384;
++    ULONG ret;
++    int tries;
++    uint32_t best_addr = 0;
++    int best_gateway = -1;
++    ULONG best_metric = 0;
++    const ULONG flags = GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST |
++                        GAA_FLAG_SKIP_DNS_SERVER;
++
++    for (tries = 0; tries < 3; tries++) {
++        adapters = (IP_ADAPTER_ADDRESSES *) malloc(size);
++        if (!adapters) {
++            return 0;
++        }
++        ret = GetAdaptersAddresses(AF_INET, flags, NULL, adapters, &size);
++        if (ret == NO_ERROR) {
++            break;
++        }
++        free(adapters);
++        adapters = NULL;
++        if (ret != ERROR_BUFFER_OVERFLOW) {
++            return 0;
++        }
++    }
++    if (!adapters) {
++        return 0;
++    }
++
++    for (adapter = adapters; adapter; adapter = adapter->Next) {
++        IP_ADAPTER_UNICAST_ADDRESS *unicast;
++        int has_gateway;
++        ULONG metric;
++
++        if (adapter->OperStatus != IfOperStatusUp ||
++            adapter->IfType == IF_TYPE_SOFTWARE_LOOPBACK ||
++            !(adapter->Flags & IP_ADAPTER_IPV4_ENABLED)) {
++            continue;
++        }
++
++        has_gateway = adapter->FirstGatewayAddress ? 1 : 0;
++        metric = adapter->Ipv4Metric;
++
++        for (unicast = adapter->FirstUnicastAddress; unicast;
++             unicast = unicast->Next) {
++            struct sockaddr_in *sin;
++            uint32_t addr;
++            uint32_t host_order;
++
++            if (!unicast->Address.lpSockaddr ||
++                unicast->Address.lpSockaddr->sa_family != AF_INET) {
++                continue;
++            }
++            sin = (struct sockaddr_in *) unicast->Address.lpSockaddr;
++            addr = sin->sin_addr.s_addr;
++            host_order = ntohl(addr);
++            /* skip 0.0.0.0, 127.0.0.0/8 and 169.254.0.0/16 (APIPA) */
++            if (!addr || (host_order >> 24) == 127 ||
++                (host_order >> 16) == 0xa9fe) {
++                continue;
++            }
++            /*
++             * Prefer an adapter that has a gateway (it owns the default
++             * route); among equals prefer the lowest interface metric.
++             */
++            if (has_gateway > best_gateway ||
++                (has_gateway == best_gateway &&
++                 (!best_addr || metric < best_metric))) {
++                best_addr = addr;
++                best_gateway = has_gateway;
++                best_metric = metric;
++            }
++            break;
++        }
++    }
++
++    free(adapters);
++    return best_addr;
++}
++#endif /* WIN32 */
++
+ static uint32_t mdns_get_default_ipv4(void)
+ {
+     int fd;
+@@ -353,6 +453,13 @@
+     struct sockaddr_in local;
+     socklen_t local_len = sizeof(local);
+ 
++#ifdef WIN32
++    addr = mdns_get_ipv4_from_adapters();
++    if (addr) {
++        return addr;
++    }
++#endif
++
+     fd = socket(AF_INET, SOCK_DGRAM, 0);
+     if (fd == -1) {
+         return 0;
+@@ -369,6 +476,41 @@
+     }
+ 
+     CLOSESOCKET(fd);
++
++    /*
++     * Never advertise a loopback address: an A record of 127.0.0.1 makes the
++     * service undiscoverable from every other host on the network.
++     */
++    if ((ntohl(addr) >> 24) == 127) {
++        addr = 0;
++    }
++
++#ifdef WIN32
++    if (!addr) {
++        /* last resort: the IPv4 address the resolver has for this host */
++        char host[256];
++        struct addrinfo hints;
++        struct addrinfo *result = NULL;
++        struct addrinfo *ai;
++
++        memset(&hints, 0, sizeof(hints));
++        hints.ai_family = AF_INET;
++        hints.ai_socktype = SOCK_DGRAM;
++        if (gethostname(host, sizeof(host)) == 0 &&
++            getaddrinfo(host, NULL, &hints, &result) == 0) {
++            for (ai = result; ai; ai = ai->ai_next) {
++                uint32_t candidate =
++                    ((struct sockaddr_in *) ai->ai_addr)->sin_addr.s_addr;
++                if (candidate && (ntohl(candidate) >> 24) != 127) {
++                    addr = candidate;
++                    break;
++                }
++            }
++            freeaddrinfo(result);
++        }
++    }
++#endif
++
+     return addr;
+ }
+ 
