@@ -3,6 +3,8 @@
 // which is what gives us Common Controls v6, Per-Monitor V2 DPI and asInvoker.
 #include <windows.h>
 
+#include "resource.h"
+
 #ifndef RT_MANIFEST
 #define RT_MANIFEST 24
 #endif
@@ -11,6 +13,9 @@
 #endif
 
 CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "app.manifest"
+
+// Drawn by tools/make-icon.py; a navy tile, a screen, and a triangle rising into it.
+IDI_APPICON ICON "app.ico"
 
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION    0,2,0,0

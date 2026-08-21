@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "audio_mute.h"
+#include "../res/resource.h"
 #include "single_instance.h"
 #include "stale_receivers.h"
 #include "strings.h"
@@ -211,8 +212,12 @@ bool MainWindow::create() {
     wc.style         = CS_HREDRAW | CS_VREDRAW;
     wc.lpfnWndProc   = &MainWindow::wndProcThunk;
     wc.hInstance     = hinst_;
-    wc.hIcon         = LoadIconW(nullptr, IDI_APPLICATION);
-    wc.hIconSm       = LoadIconW(nullptr, IDI_APPLICATION);
+    // LR_SHARED: the system owns these, so they must not be destroyed by us.
+    wc.hIcon   = static_cast<HICON>(LoadImageW(hinst_, MAKEINTRESOURCEW(IDI_APPICON),
+                                               IMAGE_ICON, 0, 0, LR_DEFAULTSIZE | LR_SHARED));
+    wc.hIconSm = static_cast<HICON>(LoadImageW(hinst_, MAKEINTRESOURCEW(IDI_APPICON),
+                                               IMAGE_ICON, GetSystemMetrics(SM_CXSMICON),
+                                               GetSystemMetrics(SM_CYSMICON), LR_SHARED));
     wc.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
     wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1);
     wc.lpszClassName = kWindowClass;

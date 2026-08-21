@@ -4,6 +4,7 @@
 
 #include <cstring>
 
+#include "../res/resource.h"
 #include "strings.h"
 
 namespace ui {
@@ -16,8 +17,13 @@ void fillNid(NOTIFYICONDATAW& nid, HWND owner, UINT callbackMsg, const std::wstr
     nid.uID              = Tray::kIconId;
     nid.uFlags           = NIF_MESSAGE | NIF_ICON | NIF_TIP;
     nid.uCallbackMessage = callbackMsg;
-    // Phase 3 will ship a real .ico; IDI_APPLICATION is the documented placeholder.
-    nid.hIcon            = LoadIconW(nullptr, IDI_APPLICATION);
+    // Notification-area size, not the window size: SM_CXSMICON picks the 16px (or the DPI
+    // equivalent) image out of the .ico. LR_SHARED, so there is nothing to destroy.
+    nid.hIcon = static_cast<HICON>(LoadImageW(GetModuleHandleW(nullptr),
+                                              MAKEINTRESOURCEW(IDI_APPICON), IMAGE_ICON,
+                                              GetSystemMetrics(SM_CXSMICON),
+                                              GetSystemMetrics(SM_CYSMICON), LR_SHARED));
+    if (!nid.hIcon) nid.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
     lstrcpynW(nid.szTip, tip.c_str(), static_cast<int>(ARRAYSIZE(nid.szTip)));
 }
 
