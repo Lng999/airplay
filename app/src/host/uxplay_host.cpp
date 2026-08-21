@@ -11,6 +11,7 @@
 
 #include <atomic>
 #include <cstdio>
+#include <cstdlib>
 #include <mutex>
 #include <string>
 #include <thread>
@@ -99,6 +100,9 @@ struct UxplayHost::Impl {
     // Last fatal-looking line seen on the pipe. Written and read on the reader thread only.
     // A child that rejects its arguments exits with code 0, so the code alone explains nothing.
     std::string lastErrorLine;
+    // -FPSdata reports arrive as XML, one element per line, so the key and its value land in
+    // two separate calls to handleLine().
+    std::string pendingPlistKey;
 
     void emit(const HostEvent& ev) {
         HostEventCallback local;
@@ -160,6 +164,29 @@ struct UxplayHost::Impl {
             if (!parsed.detail.empty()) pinRunDecoded = true;
         } else {
             closePinRun();
+        }
+
+        // --- -FPSdata report: pair "<key>submitSurfaceFPS</key>" with the integer after it ---
+        if (parsed.tag == LineTag::PlistKey) {
+            pendingPlistKey = parsed.detail;
+        } else if (parsed.tag == LineTag::PlistInteger) {
+            if (pendingPlistKey == "submitSurfaceFPS") {
+                HostEvent fps{};
+                fps.kind = HostEventKind::MirrorFps;
+                fps.srcWidth = std::atoi(parsed.detail.c_str());
+                fps.message = parsed.detail;
+                emit(fps);
+            }
+            pendingPlistKey.clear();
+        } else if (parsed.tag != LineTag::PlistNoise) {
+            pendingPlistKey.clear();
+        }
+
+        // The reports are ~30 lines of XML every second. Useful as a signal, unreadable as a
+        // log, so the envelope never reaches the sink - only the parsed frame rate does.
+        if (parsed.tag == LineTag::PlistKey || parsed.tag == LineTag::PlistInteger ||
+            parsed.tag == LineTag::PlistNoise) {
+            return;
         }
 
         if (parsed.tag == LineTag::Error) {
@@ -286,7 +313,9 @@ std::vector<std::wstring> UxplayHost::buildArgs(const HostConfig& cfg) {
         a.push_back(L"-vd");
         a.push_back(widen(cfg.videoDecoder));
     }
-    if (cfg.fpsData)    a.push_back(L"-FPSdata");                // uxplay.cpp:1451
+    // Always on (uxplay.cpp:1451). The reports are how we know whether the phone is still
+    // producing frames; the XML never reaches the log, only the parsed rate does.
+    a.push_back(L"-FPSdata");
     a.push_back(L"-reset"); a.push_back(std::to_wstring(cfg.resetSeconds));  // uxplay.cpp:1452
     for (const std::string& extra : cfg.extraArgs) a.push_back(widen(extra));
     return a;
@@ -306,6 +335,7 @@ bool UxplayHost::start(const HostConfig& cfg, std::string* err) {
     impl_->pinRunActive = false;
     impl_->pinRunDecoded = false;
     impl_->lastErrorLine.clear();
+    impl_->pendingPlistKey.clear();
 
     const auto fail = [&](const std::string& text) {
         if (err) *err = text;

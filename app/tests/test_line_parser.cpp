@@ -376,23 +376,16 @@ void testBareErrorLine() {
 // uxplay.cpp:549 - the client stopped asking for feedback. An iPhone with its screen off
 // prints this once a second; it is NOT a failure and must not surface as one.
 void testFeedbackLate() {
-    beginTest("feedback late (screen off)");
+    beginTest("feedback late is not an error");
     ParsedLine p = parseUxplayLineDetailed(
         "*** ERROR:   3 seconds since last client feedback request "
         "(expected every two seconds); client may be offline");
     CHECK_TAG(p, LineTag::FeedbackLate);
-    const HostEvent* e = find(p.events, HostEventKind::MirrorStalled);
-    CHECK(e != nullptr);
-    if (e) CHECK_INT(e->srcWidth, 3);
-    // it must not also be reported as a plain error
+    // Recognised, but must not reach the user as an error - and it is not a stall either:
+    // a sleeping iPhone keeps requesting feedback.
     CHECK(find(p.events, HostEventKind::Error) == nullptr);
-
-    ParsedLine q = parseUxplayLineDetailed(
-        "*** ERROR:  17 seconds since last client feedback request "
-        "(expected every two seconds); client may be offline");
-    const HostEvent* e2 = find(q.events, HostEventKind::MirrorStalled);
-    CHECK(e2 != nullptr);
-    if (e2) CHECK_INT(e2->srcWidth, 17);
+    CHECK(find(p.events, HostEventKind::MirrorFps) == nullptr);
+    CHECK_INT(static_cast<long long>(p.events.size()), 1);   // the LogLine only
 }
 
 // -FPSdata reports (lib/raop_rtp_mirror.c:807-811). submitSurfaceFPS == 0 is the only
@@ -453,7 +446,7 @@ void testBuildArgsDefault() {
     std::string s = narrowAscii(joinArgs(UxplayHost::buildArgs(baseConfig())));
     CHECK_STR(s,
               "C:\\airplay\\build\\uxplay.exe -n AirPlay-PC -nh -p 7100 "
-              "-vs d3d11videosink -as autoaudiosink -nohold -fps 60 -reset 15");
+              "-vs d3d11videosink -as autoaudiosink -nohold -fps 60 -FPSdata -reset 15");
 }
 
 void testBuildArgsBarePort() {
@@ -479,7 +472,7 @@ void testBuildArgsFlags() {
     std::string s = narrowAscii(joinArgs(UxplayHost::buildArgs(c)));
     CHECK_STR(s,
               "C:\\airplay\\build\\uxplay.exe -n AirPlay-PC -nh -p 7100 "
-              "-vs d3d12videosink -as wasapi2sink -fs -h265 -d -fps 60 -reset 0");
+              "-vs d3d12videosink -as wasapi2sink -fs -h265 -d -fps 60 -FPSdata -reset 0");
 }
 
 // -fps / -vd / -FPSdata: the smoothness levers. maxFps 0 must omit -fps entirely so the
@@ -493,10 +486,10 @@ void testBuildArgsSmoothness() {
 
     c.maxFps = 30;
     c.videoDecoder = "d3d11h264dec";
-    c.fpsData = true;
     s = narrowAscii(joinArgs(UxplayHost::buildArgs(c)));
     CHECK(s.find(" -fps 30 ") != std::string::npos);
     CHECK(s.find(" -vd d3d11h264dec ") != std::string::npos);
+    // -FPSdata is unconditional: the stall detection depends on those reports.
     CHECK(s.find(" -FPSdata") != std::string::npos);
 }
 
@@ -505,9 +498,9 @@ void testBuildArgsExtrasLast() {
     HostConfig c = baseConfig();
     c.extraArgs = {"-m", "aa:bb:cc:dd:ee:ff"};
     std::vector<std::wstring> a = UxplayHost::buildArgs(c);
-    // 15 fixed elements (exe -n name -nh -p 7100 -vs .. -as .. -nohold -fps 60 -reset 15)
-    // + 2 extras
-    CHECK_INT(static_cast<long long>(a.size()), 17);
+    // 16 fixed elements (exe -n name -nh -p 7100 -vs .. -as .. -nohold -fps 60 -FPSdata
+    // -reset 15) + 2 extras
+    CHECK_INT(static_cast<long long>(a.size()), 18);
     CHECK(a[a.size() - 2] == L"-m");
     CHECK(a[a.size() - 1] == L"aa:bb:cc:dd:ee:ff");
 }

@@ -52,7 +52,6 @@ struct AppConfig {
                                                // while the phone is just asleep.
     int          maxFps       = 60;            // -fps; 0 = UxPlay default (30, raop.c:623)
     std::wstring videoDecoder;                 // -vd; empty = decodebin (picks by rank)
-    bool         fpsData      = false;         // -FPSdata; client reports into the log
 
     // [app]
     bool         alwaysOnTop       = false;

@@ -160,12 +160,10 @@ ParsedLine parseUxplayLineDetailed(const std::string& rawIn) {
     //     off produces it once a second and recovers on its own. Must be checked before the
     //     generic error prefix or it would be reported as an error to the user.
     if (t.find("seconds since last client feedback request") != std::string::npos) {
+        // Tagged but no event: it means the network is late, not that mirroring paused - an
+        // iPhone with its screen off keeps asking for feedback. It must simply not be
+        // reported to the user as an error.
         out.tag = LineTag::FeedbackLate;
-        HostEvent ev = makeEvent(HostEventKind::MirrorStalled, t);
-        // "*** ERROR:   3 seconds since ..." -> pull the count out for the UI.
-        size_t digit = t.find_first_of("0123456789");
-        if (digit != std::string::npos) ev.srcWidth = std::atoi(t.c_str() + digit);
-        out.events.push_back(ev);
         return out;
     }
 

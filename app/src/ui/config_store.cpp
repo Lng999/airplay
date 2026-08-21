@@ -175,7 +175,6 @@ void ConfigStore::load(AppConfig& cfg) const {
 
     cfg.maxFps            = readInt(f,  L"receiver", L"max_fps",       cfg.maxFps);
     cfg.videoDecoder      = readStr(f,  L"receiver", L"video_decoder", cfg.videoDecoder);
-    cfg.fpsData           = readBool(f, L"receiver", L"fps_data",      cfg.fpsData);
 
     cfg.alwaysOnTop       = readBool(f, L"app", L"always_on_top",      cfg.alwaysOnTop);
     cfg.startMinimized    = readBool(f, L"app", L"start_minimized",    cfg.startMinimized);
@@ -216,7 +215,6 @@ void ConfigStore::save(const AppConfig& cfg) const {
 
     writeInt(f, L"receiver", L"max_fps",       cfg.maxFps);
     writeStr(f, L"receiver", L"video_decoder", cfg.videoDecoder);
-    writeInt(f, L"receiver", L"fps_data",      cfg.fpsData ? 1 : 0);
 
     writeInt(f, L"app", L"always_on_top",      cfg.alwaysOnTop ? 1 : 0);
     writeInt(f, L"app", L"start_minimized",    cfg.startMinimized ? 1 : 0);
@@ -253,7 +251,6 @@ airplay::HostConfig ConfigStore::toHostConfig(const AppConfig& cfg) {
     hc.resetSeconds = cfg.resetSeconds;
     hc.maxFps       = cfg.maxFps;
     hc.videoDecoder = narrow(cfg.videoDecoder);
-    hc.fpsData      = cfg.fpsData;
     return hc;
 }
 

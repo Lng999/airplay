@@ -48,7 +48,6 @@ inline constexpr const wchar_t* kLabelAudio = L"Ses çıkışı";
 inline constexpr const wchar_t* kChkFullscreen  = L"Tam ekran";
 inline constexpr const wchar_t* kChkH265        = L"H.265";
 inline constexpr const wchar_t* kChkDebug       = L"Ayrıntılı günlük";
-inline constexpr const wchar_t* kChkFpsData     = L"İstemci FPS raporu (günlüğe)";
 inline constexpr const wchar_t* kChkAlwaysOnTop = L"Her zaman üstte";
 inline constexpr const wchar_t* kChkAutostart   = L"Açılışta alıcıyı başlat";
 

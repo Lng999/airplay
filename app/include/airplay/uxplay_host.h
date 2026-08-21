@@ -27,11 +27,12 @@ enum class HostEventKind {
     Ports,           // ports parsed (uxplay.cpp:3205): udp[3], tcp[3]
     Resolution,      // only with debug=true: width/height parsed (lib/raop_rtp_mirror.c:608-609)
     Pin,             // pairing PIN block seen (uxplay.cpp:2196-2205); message = digits if parsed
-    // The client has not asked for feedback for a few seconds (uxplay.cpp:549). An iPhone
-    // does this when its screen is locked: the RTSP session and the video window stay alive
-    // but no new frames arrive, so the last one freezes on screen. message = the raw line,
-    // srcWidth carries the seconds count.
-    MirrorStalled,
+    // One -FPSdata report from the client (lib/raop_rtp_mirror.c:807-811). srcWidth carries
+    // submitSurfaceFPS: the number of frames the phone actually produced in the last second.
+    // It falls to 0 while the screen is off - the session and the video window stay alive,
+    // so the last frame would otherwise hang on screen - and rises again on wake. Requires
+    // -FPSdata; without it this event never arrives.
+    MirrorFps,
     Warning,         // "*** WARNING: ..." line
     Error            // "*** ERROR: ..." line (does not necessarily change state)
 };
@@ -70,7 +71,6 @@ struct HostConfig {
     // which picks by rank and on this machine lands on d3d12h264dec (258) while the sink is
     // d3d11videosink - every frame then crosses the D3D12/D3D11 boundary.
     std::string videoDecoder;
-    bool fpsData{false};             // -FPSdata: client performance reports (XML) into the log
     bool noHold{true};               // -nohold (new client may take over)
     int  resetSeconds{15};           // -reset <n>; 0 disables
     std::vector<std::string> extraArgs; // passed through verbatim, last

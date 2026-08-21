@@ -77,7 +77,6 @@ private:
     HWND lblDecoder_ = nullptr, cmbDecoder_ = nullptr;
     HWND lblReset_ = nullptr, cmbReset_ = nullptr;
     HWND chkFullscreen_ = nullptr, chkH265_ = nullptr, chkDebug_ = nullptr;
-    HWND chkFpsData_ = nullptr;
     HWND chkAlwaysOnTop_ = nullptr, chkAutostart_ = nullptr;
     HWND btnToggle_ = nullptr, btnCopy_ = nullptr;   // one button: Start <-> Stop
     HWND secAdvanced_ = nullptr, secDetails_ = nullptr;   // collapsible section headers
@@ -100,7 +99,9 @@ private:
     // A locked iPhone stops requesting feedback; the session and the window stay up, so the
     // last frame freezes on screen. We hide the window until the reports stop arriving.
     bool  mirrorStalled_  = false;
-    DWORD lastStallTick_  = 0;
+    int   zeroFpsReports_ = 0;   // consecutive 0-fps reports; 2 in a row means "asleep"
+    int   currentFps_     = 0;   // last non-zero submitSurfaceFPS, shown in the status line
+    DWORD lastFpsTick_    = 0;   // safety net: reports stopping must not leave the video hidden
     HWND  videoWindow_    = nullptr;   // the window we hid, kept so it can be shown again
     std::wstring clientName_, clientModel_, lastError_, ipv4_;
     std::wstring resolutionText_;   // "1920x1080", only ever filled when debug=true

@@ -31,7 +31,6 @@ enum : int {
     IDC_CMB_DECODER,
     IDC_LBL_RESET,
     IDC_CMB_RESET,
-    IDC_CHK_FPSDATA,
     IDC_CHK_FULLSCREEN,
     IDC_CHK_H265,
     IDC_CHK_DEBUG,
@@ -327,8 +326,6 @@ void MainWindow::createControls() {
     chkH265_        = mk(L"BUTTON", str::kChkH265, BS_AUTOCHECKBOX | WS_TABSTOP, IDC_CHK_H265);
     chkDebug_       = mk(L"BUTTON", str::kChkDebug, BS_AUTOCHECKBOX | WS_TABSTOP,
                          IDC_CHK_DEBUG);
-    chkFpsData_     = mk(L"BUTTON", str::kChkFpsData, BS_AUTOCHECKBOX | WS_TABSTOP,
-                         IDC_CHK_FPSDATA);
     chkAlwaysOnTop_ = mk(L"BUTTON", str::kChkAlwaysOnTop, BS_AUTOCHECKBOX | WS_TABSTOP,
                          IDC_CHK_ALWAYSONTOP);
     chkAutostart_   = mk(L"BUTTON", str::kChkAutostart, BS_AUTOCHECKBOX | WS_TABSTOP,
@@ -355,7 +352,7 @@ void MainWindow::createControls() {
     HWND all[] = {status_,     hint_,           lblName_,       editName_,      lblPort_,
                   editPort_,   lblVideo_,       cmbVideo_,      lblAudio_,      cmbAudio_,
                   chkFullscreen_, chkH265_,     chkDebug_,      chkAlwaysOnTop_, chkAutostart_,
-                  lblFps_,     cmbFps_,         lblDecoder_,    cmbDecoder_,    chkFpsData_,
+                  lblFps_,     cmbFps_,         lblDecoder_,    cmbDecoder_,
                   lblReset_,   cmbReset_,
                   btnToggle_,  btnCopy_,        secAdvanced_,   secDetails_,    listLog_};
     for (HWND h : all)
@@ -420,8 +417,6 @@ void MainWindow::layout() {
         y += s(24);
         place(chkAlwaysOnTop_, m, y, s(118), s(20));
         place(chkAutostart_, m + s(124), y, s(170), s(20));
-        y += s(24);
-        place(chkFpsData_, m, y, s(210), s(20));
         y += s(28);
         place(btnCopy_, m, y, s(140), s(28));
         y += s(36);
@@ -444,7 +439,7 @@ void MainWindow::applySectionVisibility() {
     const int adv = showAdvanced_ ? SW_SHOW : SW_HIDE;
     for (HWND h : {lblPort_, editPort_, lblFps_, cmbFps_, lblVideo_, cmbVideo_, lblDecoder_,
                    cmbDecoder_, lblAudio_, cmbAudio_, lblReset_, cmbReset_, chkFullscreen_,
-                   chkH265_, chkDebug_, chkFpsData_, chkAlwaysOnTop_, chkAutostart_,
+                   chkH265_, chkDebug_, chkAlwaysOnTop_, chkAutostart_,
                    btnCopy_})
         if (h) ShowWindow(h, adv);
     if (listLog_) ShowWindow(listLog_, showDetails_ ? SW_SHOW : SW_HIDE);
@@ -535,7 +530,6 @@ void MainWindow::controlsFromConfig() {
         if (kResetValues[i] == cfg_.resetSeconds) resetIdx = i;
     SendMessageW(cmbReset_, CB_SETCURSEL, static_cast<WPARAM>(resetIdx), 0);
 
-    setChecked(chkFpsData_, cfg_.fpsData);
     setChecked(chkFullscreen_, cfg_.fullscreen);
     setChecked(chkH265_, cfg_.h265);
     setChecked(chkDebug_, cfg_.debug);
@@ -567,7 +561,6 @@ void MainWindow::configFromControls() {
     if (i >= 0 && i < static_cast<int>(ARRAYSIZE(kResetValues)))
         cfg_.resetSeconds = kResetValues[i];
 
-    cfg_.fpsData           = isChecked(chkFpsData_);
     cfg_.fullscreen        = isChecked(chkFullscreen_);
     cfg_.h265              = isChecked(chkH265_);
     cfg_.debug             = isChecked(chkDebug_);
@@ -604,6 +597,11 @@ void MainWindow::updateStatus() {
             hint = clientName_.empty() ? std::wstring(str::kHintUnknownClient) : clientName_;
             if (!clientModel_.empty()) hint += L" (" + clientModel_ + L")";
             if (!resolutionText_.empty()) hint += L" · " + resolutionText_;
+            if (currentFps_ > 0) {
+                wchar_t fps[32];
+                _snwprintf(fps, 32, L" · %d fps", currentFps_);
+                hint += fps;
+            }
             break;
         case airplay::HostState::Stopping:
             text = str::kStateStopping;
@@ -635,7 +633,7 @@ void MainWindow::updateButtons() {
     // Receiver settings only take effect on (re)start - see DESIGN 6.1 limitations.
     const BOOL editable = running ? FALSE : TRUE;
     for (HWND h : {editName_, editPort_, cmbVideo_, cmbAudio_, cmbFps_, cmbDecoder_,
-                   cmbReset_, chkFullscreen_, chkH265_, chkDebug_, chkFpsData_})
+                   cmbReset_, chkFullscreen_, chkH265_, chkDebug_})
         EnableWindow(h, editable);
 }
 
@@ -769,8 +767,10 @@ void MainWindow::onHostEvent(const airplay::HostEvent& ev) {
                 layout();
                 resizeToContent();
             }
-            if (state_ != airplay::HostState::Connected && mirrorStalled_) {
-                mirrorStalled_ = false;   // no session, nothing to unhide later
+            if (state_ != airplay::HostState::Connected) {
+                mirrorStalled_  = false;   // no session, nothing to unhide later
+                zeroFpsReports_ = 0;
+                currentFps_     = 0;
             }
             if (state_ == airplay::HostState::Waiting) {
                 ipv4_ = firstLocalIPv4();
@@ -821,15 +821,28 @@ void MainWindow::onHostEvent(const airplay::HostEvent& ev) {
                         str::kAppName, MB_ICONINFORMATION | MB_OK);
             break;
 
-        case K::MirrorStalled:
-            lastStallTick_ = GetTickCount();
-            if (!mirrorStalled_) {
-                mirrorStalled_ = true;
-                applyMirrorVisibility();
-                updateStatus();
-                logUi(L"mirror stalled: client stopped requesting feedback");
+        case K::MirrorFps: {
+            lastFpsTick_ = GetTickCount();
+            if (ev.srcWidth == 0) {
+                // Two in a row, so a single dropped report does not blink the window away.
+                if (++zeroFpsReports_ >= 2 && !mirrorStalled_) {
+                    mirrorStalled_ = true;
+                    applyMirrorVisibility();
+                    updateStatus();
+                    logUi(L"mirror stalled: client is producing no frames (screen off)");
+                }
+                break;
             }
+            zeroFpsReports_ = 0;
+            currentFps_ = ev.srcWidth;
+            if (mirrorStalled_) {
+                mirrorStalled_ = false;
+                applyMirrorVisibility();
+                logUi(L"mirror resumed: frames are arriving again");
+            }
+            updateStatus();
             break;
+        }
 
         case K::Warning:
             logUi(L"WARNING: " + widen(ev.message));
@@ -945,15 +958,15 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
         }
 
         case WM_TIMER:
-            // The stall ends by absence: the child simply stops printing the line. Two and a
-            // half seconds without one means the phone is awake again (uxplay prints it once
-            // a second, uxplay.cpp:535-556).
+            // Safety net only. The stall itself is decided by the reports; this catches the
+            // case where they stop altogether (a client that really went away), which must
+            // not leave the video window hidden with no way back.
             if (wp == kStallTimer && mirrorStalled_ &&
-                GetTickCount() - lastStallTick_ > 2500) {
+                GetTickCount() - lastFpsTick_ > 10000) {
                 mirrorStalled_ = false;
                 applyMirrorVisibility();
                 updateStatus();
-                logUi(L"mirror resumed: client feedback is back");
+                logUi(L"mirror unhidden: no reports for 10 s, not keeping the window hidden");
             }
             return 0;
 
@@ -1033,7 +1046,7 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
             createFonts();
             for (HWND h : {status_, hint_, lblName_, editName_, lblPort_, editPort_,
                            lblVideo_, cmbVideo_, lblAudio_, cmbAudio_, lblFps_, cmbFps_,
-                           lblDecoder_, cmbDecoder_, lblReset_, cmbReset_, chkFpsData_,
+                           lblDecoder_, cmbDecoder_, lblReset_, cmbReset_,
                            chkFullscreen_,
                            chkH265_, chkDebug_, chkAlwaysOnTop_, chkAutostart_,
                            btnToggle_, btnCopy_, secAdvanced_, secDetails_, listLog_})
