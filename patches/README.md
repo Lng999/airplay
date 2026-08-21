@@ -80,6 +80,37 @@ already skips a zero address (`mdnsd.c:201-203`), so the worst case degrades to
 
 ---
 
+## `0003-uxplay-utf8-argv-manifest.patch` — non-ASCII `-n <name>` was unusable on Windows
+
+`parse_arguments()` rejects any argv element that is not valid UTF-8
+(`uxplay.cpp:1204-1210`, `exit(0)`), and `-n` rejects a non-UTF-8 server name again at
+`:1239-1243`. That check is correct — the problem is what reaches it.
+
+`uxplay.exe` is linked without `-municode`, so the CRT builds `argv[]` from
+`GetCommandLineA()`, i.e. the UTF-16 command line converted to the process **ANSI code
+page**. A launcher that starts the receiver with `CreateProcessW` (our `app/src/host`, but
+equally `cmd`, PowerShell or Explorer) therefore delivers `-n Salon Odası` as CP1254 bytes;
+`is_utf8()` sees `0xFD` with no continuation byte and aborts with
+
+```
+Error: detected a non-ascii or non-UTF-8 string "orpc?cpcu?" while parsing input arguments
+```
+
+with **exit code 0**, which looks to the caller like a clean shutdown rather than a rejected
+argument.
+
+The patch embeds a manifest declaring `activeCodePage = UTF-8` (Windows 10 1903+,
+`CREATEPROCESS_MANIFEST_RESOURCE_ID` 1 / `RT_MANIFEST` 24). The process ANSI code page then
+*is* UTF-8, so the CRT's own down-conversion produces exactly the bytes `is_utf8()` wants.
+No C++ source changes, no `wmain`, and non-Windows builds are untouched.
+
+Verified 2026-08-21: `-n orpcıcpcuı` used to exit immediately; with the patch the receiver
+starts and logs `WARNING: a non-ascii (UTF-8) server-name "orpcıcpcuı" was specified`, i.e.
+UxPlay decoded the name correctly.
+
+An external `uxplay.exe.manifest` next to the binary was tried first and does **not** work —
+`activeCodePage` is only honoured from an embedded manifest.
+
 ## Applying
 
 From the repo root, against a clean submodule checkout:

@@ -1,0 +1,46 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 388b47b..f53d338 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -78,7 +78,17 @@ if  ( GST_MACOS )
+      message ( STATUS "define GST_MACOS" )
+ endif()
+ 
+-add_executable( uxplay uxplay.cpp )
++if (WIN32)
++    # Embed a manifest that sets the process code page to UTF-8 (Windows 10 1903+). argv[]
++    # then reaches parse_arguments() as UTF-8, which is what is_utf8() demands. Without it a
++    # launcher using CreateProcessW has its UTF-16 command line down-converted to the legacy
++    # ANSI code page, and any non-ASCII "-n <name>" is rejected as non-UTF-8.
++    enable_language( RC )
++    set( CMAKE_RC_FLAGS "${CMAKE_RC_FLAGS} -I \"${CMAKE_CURRENT_SOURCE_DIR}\"" )
++    add_executable( uxplay uxplay.cpp uxplay.rc )
++else()
++    add_executable( uxplay uxplay.cpp )
++endif()
+ target_link_libraries( uxplay renderers airplay )
+ if (DBUS_FOUND)
+       target_link_libraries( uxplay ${DBUS_LIBRARY})
+diff --git a/uxplay.manifest b/uxplay.manifest
+new file mode 100644
+index 0000000..42816de
+--- /dev/null
++++ b/uxplay.manifest
+@@ -0,0 +1,9 @@
++<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
++<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
++  <assemblyIdentity type="win32" name="UxPlay" version="1.74.0.0"/>
++  <application xmlns="urn:schemas-microsoft-com:asm.v3">
++    <windowsSettings>
++      <activeCodePage xmlns="http://schemas.microsoft.com/SMI/2019/WindowsSettings">UTF-8</activeCodePage>
++    </windowsSettings>
++  </application>
++</assembly>
+diff --git a/uxplay.rc b/uxplay.rc
+new file mode 100644
+index 0000000..5248de8
+--- /dev/null
++++ b/uxplay.rc
+@@ -0,0 +1,2 @@
++/* Embed uxplay.manifest as RT_MANIFEST (24) under CREATEPROCESS_MANIFEST_RESOURCE_ID (1). */
++1 24 "uxplay.manifest"
