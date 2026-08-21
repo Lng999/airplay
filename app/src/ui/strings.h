@@ -29,7 +29,7 @@ inline constexpr const wchar_t* kStateError    = L"Hata";
 
 // Second line: what the user should do next.
 inline constexpr const wchar_t* kHintStopped   = L"Alıcıyı başlatmak için Başlat'a basın";
-inline constexpr const wchar_t* kHintWaitingPre= L"iPhone'unda Denetim Merkezi → Ekran Yansıtma → ";
+inline constexpr const wchar_t* kHintWaitingPre= L"iPhone: Denetim Merkezi → Ekran Yansıtma → ";
 inline constexpr const wchar_t* kHintUnknownClient = L"Bir cihaz bağlandı";
 inline constexpr const wchar_t* kHintUnknownError  = L"Bilinmeyen hata";
 

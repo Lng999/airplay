@@ -401,7 +401,11 @@ void MainWindow::resizeToContent() {
     RECT wr{};
     if (!GetWindowRect(hwnd_, &wr)) return;
     const int client = logTop_ + (showDetails_ ? s(170) : 0) + s(14);
-    SetWindowPos(hwnd_, nullptr, 0, 0, wr.right - wr.left, client + chromeHeight(),
+    // The hint line is the widest thing in the window; a narrower window would ellipsize
+    // the one sentence that tells the user what to do.
+    int width = wr.right - wr.left;
+    if (width < s(500)) width = s(500);
+    SetWindowPos(hwnd_, nullptr, 0, 0, width, client + chromeHeight(),
                  SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
@@ -765,7 +769,7 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
             applySectionVisibility();
 
             if (cfg_.w < 200 || cfg_.h < 200)
-                SetWindowPos(hwnd_, nullptr, 0, 0, s(470), s(300),
+                SetWindowPos(hwnd_, nullptr, 0, 0, s(500), s(300),
                              SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
             layout();
             resizeToContent();
@@ -847,7 +851,7 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
 
         case WM_GETMINMAXINFO: {
             auto* mmi = reinterpret_cast<MINMAXINFO*>(lp);
-            mmi->ptMinTrackSize.x = s(450);
+            mmi->ptMinTrackSize.x = s(500);
             // logTop_ is 0 until the first layout(); s(250) covers the collapsed window.
             mmi->ptMinTrackSize.y = (logTop_ > 0 ? logTop_ : s(250)) +
                                     (showDetails_ ? s(80) : 0) + s(14) + chromeHeight();
