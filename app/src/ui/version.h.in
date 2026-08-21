@@ -1,0 +1,21 @@
+// version.h - generated from version.h.in by CMake. Do not edit the generated copy.
+//
+// The version lives in exactly one place: project(... VERSION x.y.z) in app/CMakeLists.txt.
+// From there it reaches the VERSIONINFO resource (res/app.rc includes this header, windres
+// preprocesses it with gcc), the update check (updater.cpp compares against the tag of the
+// latest GitHub release) and the installer (scripts/make-installer.ps1 reads it back out of
+// CMakeLists.txt). Bumping that one line is the whole release ritual.
+#pragma once
+
+#define AIRPLAY_VERSION_MAJOR @PROJECT_VERSION_MAJOR@
+#define AIRPLAY_VERSION_MINOR @PROJECT_VERSION_MINOR@
+#define AIRPLAY_VERSION_PATCH @PROJECT_VERSION_PATCH@
+#define AIRPLAY_VERSION_STR   "@PROJECT_VERSION@"
+#define AIRPLAY_VERSION_WSTR  L"@PROJECT_VERSION@"
+
+// Where the update check looks. Release tags are "v<version>"; the asset it downloads is the
+// one .exe attached to the release (scripts/publish-release.ps1 uploads exactly one).
+#define AIRPLAY_GH_OWNER    "Lng999"
+#define AIRPLAY_GH_REPO     "airplay"
+#define AIRPLAY_GH_OWNER_W L"Lng999"
+#define AIRPLAY_GH_REPO_W  L"airplay"

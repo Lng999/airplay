@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.20)
-project(airplay_gui CXX)
+project(airplay_gui VERSION 0.3.0 LANGUAGES CXX)
 enable_language(RC)
+
+# The one place the version is written down. src/ui/version.h.in explains where it travels.
+configure_file(src/ui/version.h.in "${CMAKE_CURRENT_BINARY_DIR}/generated/version.h" @ONLY)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -18,7 +21,9 @@ add_compile_options(-Wall -Wextra)
 add_compile_definitions(UNICODE _UNICODE)
 
 # The .rc includes app.manifest by name; windres needs the resource dir on its include path.
+# It also #includes the generated version.h, so that directory has to be reachable too.
 set(CMAKE_RC_FLAGS "${CMAKE_RC_FLAGS} -I \"${CMAKE_CURRENT_SOURCE_DIR}/res\"")
+set(CMAKE_RC_FLAGS "${CMAKE_RC_FLAGS} -I \"${CMAKE_CURRENT_BINARY_DIR}/generated\"")
 
 # --- host implementation ------------------------------------------------------
 # Lane H owns src/host (the real child-process host) and tests. Until it lands - or when
@@ -46,17 +51,19 @@ add_executable(airplay-gui WIN32
     src/ui/stale_receivers.cpp
     src/ui/single_instance.cpp
     src/ui/ui_log.cpp
+    src/ui/updater.cpp
     res/app.rc
 )
 
 target_include_directories(airplay-gui PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/ui"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated"
 )
 
 target_link_libraries(airplay-gui PRIVATE
     airplay_host
-    shell32 ole32 comctl32 user32 gdi32 advapi32 iphlpapi ws2_32
+    shell32 ole32 comctl32 user32 gdi32 advapi32 iphlpapi ws2_32 winhttp
 )
 
 # WIN32 already implies -mwindows; -municode selects the wWinMain entry point and -static
