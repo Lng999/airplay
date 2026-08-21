@@ -515,13 +515,12 @@ void MainWindow::doStart() {
     store_.save(cfg_);
 
     if (cfg_.uxplayPath.empty()) {
-        lastError_ = L"uxplay.exe not found - build it (scripts/build.sh) or set "
-                     L"[app] uxplay_path in config.ini";
+        lastError_ = str::kErrNoUxplay;
         state_ = airplay::HostState::Error;
         updateStatus();
         updateButtons();
         logUi(lastError_);
-        MessageBoxW(hwnd_, lastError_.c_str(), L"airplay", MB_ICONERROR | MB_OK);
+        MessageBoxW(hwnd_, lastError_.c_str(), str::kAppName, MB_ICONERROR | MB_OK);
         return;
     }
 
@@ -539,12 +538,12 @@ void MainWindow::doStart() {
 
     std::string err;
     if (!host_.start(hc, &err)) {
-        lastError_ = err.empty() ? L"failed to start uxplay.exe" : widen(err);
+        lastError_ = err.empty() ? std::wstring(str::kErrStartFailed) : widen(err);
         state_ = airplay::HostState::Error;
         updateStatus();
         updateButtons();
         logUi(lastError_);
-        MessageBoxW(hwnd_, lastError_.c_str(), L"airplay", MB_ICONERROR | MB_OK);
+        MessageBoxW(hwnd_, lastError_.c_str(), str::kAppName, MB_ICONERROR | MB_OK);
         return;
     }
 
@@ -653,8 +652,8 @@ void MainWindow::onHostEvent(const airplay::HostEvent& ev) {
 
         case K::Pin:
             logUi(L"pairing PIN: " + widen(ev.message));
-            MessageBoxW(hwnd_, (L"Pairing PIN: " + widen(ev.message)).c_str(), L"airplay",
-                        MB_ICONINFORMATION | MB_OK);
+            MessageBoxW(hwnd_, (std::wstring(str::kPinTitle) + L": " + widen(ev.message)).c_str(),
+                        str::kAppName, MB_ICONINFORMATION | MB_OK);
             break;
 
         case K::Warning:
