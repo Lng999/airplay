@@ -52,6 +52,8 @@ struct AppConfig {
     bool         alwaysOnTop       = false;
     bool         startMinimized    = false;
     bool         autostartReceiver = false;
+    bool         showAdvanced      = false;   // collapsible sections, see PHASE2-UX-SPEC
+    bool         showDetails       = false;
     std::wstring msysRoot          = L"C:\\msys64";
     std::wstring uxplayPath;                   // empty => not found, UI shows an error
 

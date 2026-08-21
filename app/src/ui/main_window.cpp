@@ -684,9 +684,12 @@ void MainWindow::onCommand(int id, int code) {
         case IDC_SEC_DETAILS: {
             bool& flag = (id == IDC_SEC_ADVANCED) ? showAdvanced_ : showDetails_;
             flag = !flag;
+            cfg_.showAdvanced = showAdvanced_;
+            cfg_.showDetails  = showDetails_;
             applySectionVisibility();
             layout();
             resizeToContent();
+            store_.save(cfg_);
             break;
         }
         case IDC_CHK_ALWAYSONTOP:
@@ -740,6 +743,8 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
                                           : L"uxplay.exe: " + cfg_.uxplayPath);
 
             controlsFromConfig();
+            showAdvanced_ = cfg_.showAdvanced;
+            showDetails_  = cfg_.showDetails;
             applySectionVisibility();
 
             if (cfg_.w < 200 || cfg_.h < 200)
