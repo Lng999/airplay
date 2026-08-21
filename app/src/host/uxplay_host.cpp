@@ -96,6 +96,9 @@ struct UxplayHost::Impl {
     // track the run and synthesise a digit-less Pin event if none of the rows decoded.
     bool pinRunActive{false};
     bool pinRunDecoded{false};
+    // Last fatal-looking line seen on the pipe. Written and read on the reader thread only.
+    // A child that rejects its arguments exits with code 0, so the code alone explains nothing.
+    std::string lastErrorLine;
 
     void emit(const HostEvent& ev) {
         HostEventCallback local;
@@ -159,6 +162,11 @@ struct UxplayHost::Impl {
             closePinRun();
         }
 
+        if (parsed.tag == LineTag::Error) {
+            for (const HostEvent& ev : parsed.events)
+                if (ev.kind == HostEventKind::Error) lastErrorLine = ev.message;
+        }
+
         for (const HostEvent& ev : parsed.events) emit(ev);
 
         // --- state machine ---------------------------------------------------------------------
@@ -218,9 +226,14 @@ struct UxplayHost::Impl {
         if (stopRequested.load(std::memory_order_acquire)) {
             setState(HostState::Stopped);
         } else {
-            char msg[128];
-            std::snprintf(msg, sizeof(msg), "uxplay.exe exited unexpectedly (exit code %lu)",
-                          static_cast<unsigned long>(code));
+            char msg[512];
+            if (lastErrorLine.empty()) {
+                std::snprintf(msg, sizeof(msg), "uxplay.exe exited unexpectedly (exit code %lu)",
+                              static_cast<unsigned long>(code));
+            } else {
+                std::snprintf(msg, sizeof(msg), "uxplay.exe exited (code %lu): %s",
+                              static_cast<unsigned long>(code), lastErrorLine.c_str());
+            }
             emitError(msg);
             setState(HostState::Error);
         }
@@ -283,6 +296,7 @@ bool UxplayHost::start(const HostConfig& cfg, std::string* err) {
     impl_->stopRequested.store(false, std::memory_order_release);
     impl_->pinRunActive = false;
     impl_->pinRunDecoded = false;
+    impl_->lastErrorLine.clear();
 
     const auto fail = [&](const std::string& text) {
         if (err) *err = text;
