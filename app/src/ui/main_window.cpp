@@ -25,6 +25,11 @@ enum : int {
     IDC_CMB_VIDEO,
     IDC_LBL_AUDIO,
     IDC_CMB_AUDIO,
+    IDC_LBL_FPS,
+    IDC_CMB_FPS,
+    IDC_LBL_DECODER,
+    IDC_CMB_DECODER,
+    IDC_CHK_FPSDATA,
     IDC_CHK_FULLSCREEN,
     IDC_CHK_H265,
     IDC_CHK_DEBUG,
@@ -40,6 +45,15 @@ enum : int {
 const wchar_t* const kVideoSinks[] = {L"d3d11videosink", L"d3d12videosink", L"autovideosink"};
 const wchar_t* const kAudioSinks[] = {L"autoaudiosink", L"wasapi2sink", L"wasapisink",
                                       L"directsoundsink"};
+
+// The frame-rate ceiling handed to the client as maxFPS. Index-matched pairs.
+const wchar_t* const kFpsLabels[] = {str::kFps60, str::kFps30};
+const int            kFpsValues[] = {60, 30};
+
+// Decoder choices: label shown, value passed to -vd. "" = decodebin (UxPlay's default).
+const wchar_t* const kDecoderLabels[] = {str::kDecAuto, str::kDecD3D11, str::kDecNv,
+                                         str::kDecSw};
+const wchar_t* const kDecoderValues[] = {L"", L"d3d11h264dec", L"nvh264dec", L"avdec_h264"};
 
 UINT dpiForWindow(HWND hwnd) {
     using Fn = UINT(WINAPI*)(HWND);
@@ -261,6 +275,17 @@ void MainWindow::createControls() {
     lblAudio_ = mk(L"STATIC", str::kLabelAudio, SS_LEFT, IDC_LBL_AUDIO);
     cmbAudio_ = mk(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, IDC_CMB_AUDIO);
 
+    lblFps_     = mk(L"STATIC", str::kLabelFps, SS_LEFT, IDC_LBL_FPS);
+    cmbFps_     = mk(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, IDC_CMB_FPS);
+    lblDecoder_ = mk(L"STATIC", str::kLabelDecoder, SS_LEFT, IDC_LBL_DECODER);
+    cmbDecoder_ = mk(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP,
+                     IDC_CMB_DECODER);
+
+    for (const wchar_t* f : kFpsLabels)
+        SendMessageW(cmbFps_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(f));
+    for (const wchar_t* d : kDecoderLabels)
+        SendMessageW(cmbDecoder_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(d));
+
     for (const wchar_t* v : kVideoSinks)
         SendMessageW(cmbVideo_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(v));
     for (const wchar_t* a : kAudioSinks)
@@ -271,6 +296,8 @@ void MainWindow::createControls() {
     chkH265_        = mk(L"BUTTON", str::kChkH265, BS_AUTOCHECKBOX | WS_TABSTOP, IDC_CHK_H265);
     chkDebug_       = mk(L"BUTTON", str::kChkDebug, BS_AUTOCHECKBOX | WS_TABSTOP,
                          IDC_CHK_DEBUG);
+    chkFpsData_     = mk(L"BUTTON", str::kChkFpsData, BS_AUTOCHECKBOX | WS_TABSTOP,
+                         IDC_CHK_FPSDATA);
     chkAlwaysOnTop_ = mk(L"BUTTON", str::kChkAlwaysOnTop, BS_AUTOCHECKBOX | WS_TABSTOP,
                          IDC_CHK_ALWAYSONTOP);
     chkAutostart_   = mk(L"BUTTON", str::kChkAutostart, BS_AUTOCHECKBOX | WS_TABSTOP,
@@ -297,6 +324,7 @@ void MainWindow::createControls() {
     HWND all[] = {status_,     hint_,           lblName_,       editName_,      lblPort_,
                   editPort_,   lblVideo_,       cmbVideo_,      lblAudio_,      cmbAudio_,
                   chkFullscreen_, chkH265_,     chkDebug_,      chkAlwaysOnTop_, chkAutostart_,
+                  lblFps_,     cmbFps_,         lblDecoder_,    cmbDecoder_,    chkFpsData_,
                   btnToggle_,  btnCopy_,        secAdvanced_,   secDetails_,    listLog_};
     for (HWND h : all)
         if (h) SendMessageW(h, WM_SETFONT, reinterpret_cast<WPARAM>(fontUi_), TRUE);
@@ -339,9 +367,14 @@ void MainWindow::layout() {
     if (showAdvanced_) {
         place(lblPort_, m, y + s(5), s(36), s(16));
         place(editPort_, m + s(40), y, s(70), s(24));
+        place(lblFps_, m + s(126), y + s(5), s(60), s(16));
+        place(cmbFps_, m + s(188), y, s(150), s(220));
         y += s(32);
         place(lblVideo_, m, y + s(5), s(88), s(16));
         place(cmbVideo_, m + s(92), y, s(170), s(220));
+        y += s(30);
+        place(lblDecoder_, m, y + s(5), s(88), s(16));
+        place(cmbDecoder_, m + s(92), y, s(190), s(220));
         y += s(30);
         place(lblAudio_, m, y + s(5), s(88), s(16));
         place(cmbAudio_, m + s(92), y, s(170), s(220));
@@ -352,6 +385,8 @@ void MainWindow::layout() {
         y += s(24);
         place(chkAlwaysOnTop_, m, y, s(118), s(20));
         place(chkAutostart_, m + s(124), y, s(170), s(20));
+        y += s(24);
+        place(chkFpsData_, m, y, s(210), s(20));
         y += s(28);
         place(btnCopy_, m, y, s(140), s(28));
         y += s(36);
@@ -372,9 +407,9 @@ void MainWindow::layout() {
 
 void MainWindow::applySectionVisibility() {
     const int adv = showAdvanced_ ? SW_SHOW : SW_HIDE;
-    for (HWND h : {lblPort_, editPort_, lblVideo_, cmbVideo_, lblAudio_, cmbAudio_,
-                   chkFullscreen_, chkH265_, chkDebug_, chkAlwaysOnTop_, chkAutostart_,
-                   btnCopy_})
+    for (HWND h : {lblPort_, editPort_, lblFps_, cmbFps_, lblVideo_, cmbVideo_, lblDecoder_,
+                   cmbDecoder_, lblAudio_, cmbAudio_, chkFullscreen_, chkH265_, chkDebug_,
+                   chkFpsData_, chkAlwaysOnTop_, chkAutostart_, btnCopy_})
         if (h) ShowWindow(h, adv);
     if (listLog_) ShowWindow(listLog_, showDetails_ ? SW_SHOW : SW_HIDE);
 
@@ -422,6 +457,17 @@ void MainWindow::controlsFromConfig() {
                                         reinterpret_cast<LPARAM>(cfg_.audioSink.c_str())));
     SendMessageW(cmbAudio_, CB_SETCURSEL, static_cast<WPARAM>(idx == CB_ERR ? 0 : idx), 0);
 
+    int fpsIdx = 0;
+    for (int i = 0; i < static_cast<int>(ARRAYSIZE(kFpsValues)); ++i)
+        if (kFpsValues[i] == cfg_.maxFps) fpsIdx = i;
+    SendMessageW(cmbFps_, CB_SETCURSEL, static_cast<WPARAM>(fpsIdx), 0);
+
+    int decIdx = 0;
+    for (int i = 0; i < static_cast<int>(ARRAYSIZE(kDecoderValues)); ++i)
+        if (cfg_.videoDecoder == kDecoderValues[i]) decIdx = i;
+    SendMessageW(cmbDecoder_, CB_SETCURSEL, static_cast<WPARAM>(decIdx), 0);
+
+    setChecked(chkFpsData_, cfg_.fpsData);
     setChecked(chkFullscreen_, cfg_.fullscreen);
     setChecked(chkH265_, cfg_.h265);
     setChecked(chkDebug_, cfg_.debug);
@@ -443,6 +489,13 @@ void MainWindow::configFromControls() {
     i = static_cast<int>(SendMessageW(cmbAudio_, CB_GETCURSEL, 0, 0));
     if (i >= 0 && i < static_cast<int>(ARRAYSIZE(kAudioSinks))) cfg_.audioSink = kAudioSinks[i];
 
+    i = static_cast<int>(SendMessageW(cmbFps_, CB_GETCURSEL, 0, 0));
+    if (i >= 0 && i < static_cast<int>(ARRAYSIZE(kFpsValues))) cfg_.maxFps = kFpsValues[i];
+    i = static_cast<int>(SendMessageW(cmbDecoder_, CB_GETCURSEL, 0, 0));
+    if (i >= 0 && i < static_cast<int>(ARRAYSIZE(kDecoderValues)))
+        cfg_.videoDecoder = kDecoderValues[i];
+
+    cfg_.fpsData           = isChecked(chkFpsData_);
     cfg_.fullscreen        = isChecked(chkFullscreen_);
     cfg_.h265              = isChecked(chkH265_);
     cfg_.debug             = isChecked(chkDebug_);
@@ -504,8 +557,8 @@ void MainWindow::updateButtons() {
                                  state_ != airplay::HostState::Stopping);
     // Receiver settings only take effect on (re)start - see DESIGN 6.1 limitations.
     const BOOL editable = running ? FALSE : TRUE;
-    for (HWND h : {editName_, editPort_, cmbVideo_, cmbAudio_, chkFullscreen_, chkH265_,
-                   chkDebug_})
+    for (HWND h : {editName_, editPort_, cmbVideo_, cmbAudio_, cmbFps_, cmbDecoder_,
+                   chkFullscreen_, chkH265_, chkDebug_, chkFpsData_})
         EnableWindow(h, editable);
 }
 
@@ -872,7 +925,8 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
             dpi_ = static_cast<int>(HIWORD(wp));
             createFonts();
             for (HWND h : {status_, hint_, lblName_, editName_, lblPort_, editPort_,
-                           lblVideo_, cmbVideo_, lblAudio_, cmbAudio_, chkFullscreen_,
+                           lblVideo_, cmbVideo_, lblAudio_, cmbAudio_, lblFps_, cmbFps_,
+                           lblDecoder_, cmbDecoder_, chkFpsData_, chkFullscreen_,
                            chkH265_, chkDebug_, chkAlwaysOnTop_, chkAutostart_,
                            btnToggle_, btnCopy_, secAdvanced_, secDetails_, listLog_})
                 if (h) SendMessageW(h, WM_SETFONT, reinterpret_cast<WPARAM>(fontUi_), TRUE);

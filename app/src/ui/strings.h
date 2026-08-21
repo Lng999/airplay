@@ -38,13 +38,27 @@ inline constexpr const wchar_t* kHintErrorPrefix   = L"Alıcı kapandı: ";
 inline constexpr const wchar_t* kLabelName  = L"Bu bilgisayarın adı:";
 inline constexpr const wchar_t* kLabelPort  = L"Port";
 inline constexpr const wchar_t* kLabelVideo = L"Görüntü çıkışı";
+inline constexpr const wchar_t* kLabelFps     = L"Akıcılık";
+inline constexpr const wchar_t* kLabelDecoder = L"Görüntü çözücü";
 inline constexpr const wchar_t* kLabelAudio = L"Ses çıkışı";
 
 inline constexpr const wchar_t* kChkFullscreen  = L"Tam ekran";
 inline constexpr const wchar_t* kChkH265        = L"H.265";
 inline constexpr const wchar_t* kChkDebug       = L"Ayrıntılı günlük";
+inline constexpr const wchar_t* kChkFpsData     = L"İstemci FPS raporu (günlüğe)";
 inline constexpr const wchar_t* kChkAlwaysOnTop = L"Her zaman üstte";
 inline constexpr const wchar_t* kChkAutostart   = L"Açılışta alıcıyı başlat";
+
+// Frame-rate ceiling advertised to the client. 30 is UxPlay's own default and the reason
+// mirroring can feel choppy; 60 is what we ask for.
+inline constexpr const wchar_t* kFps60 = L"60 FPS (akıcı)";
+inline constexpr const wchar_t* kFps30 = L"30 FPS (varsayılan)";
+
+// Decoder choices. The empty value means UxPlay's "decodebin", which picks by rank.
+inline constexpr const wchar_t* kDecAuto  = L"Otomatik";
+inline constexpr const wchar_t* kDecD3D11 = L"Direct3D 11 (sink ile aynı)";
+inline constexpr const wchar_t* kDecNv    = L"NVIDIA NVDEC";
+inline constexpr const wchar_t* kDecSw    = L"Yazılım (avdec_h264)";
 
 // --- buttons / sections -----------------------------------------------------
 inline constexpr const wchar_t* kBtnStart    = L"Başlat";

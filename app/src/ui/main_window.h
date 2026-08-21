@@ -69,7 +69,10 @@ private:
     HWND lblPort_ = nullptr, editPort_ = nullptr;
     HWND lblVideo_ = nullptr, cmbVideo_ = nullptr;
     HWND lblAudio_ = nullptr, cmbAudio_ = nullptr;
+    HWND lblFps_ = nullptr, cmbFps_ = nullptr;
+    HWND lblDecoder_ = nullptr, cmbDecoder_ = nullptr;
     HWND chkFullscreen_ = nullptr, chkH265_ = nullptr, chkDebug_ = nullptr;
+    HWND chkFpsData_ = nullptr;
     HWND chkAlwaysOnTop_ = nullptr, chkAutostart_ = nullptr;
     HWND btnToggle_ = nullptr, btnCopy_ = nullptr;   // one button: Start <-> Stop
     HWND secAdvanced_ = nullptr, secDetails_ = nullptr;   // collapsible section headers
