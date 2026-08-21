@@ -42,6 +42,7 @@ inline constexpr const wchar_t* kLabelPort  = L"Port";
 inline constexpr const wchar_t* kLabelVideo = L"Görüntü çıkışı";
 inline constexpr const wchar_t* kLabelFps     = L"Akıcılık";
 inline constexpr const wchar_t* kLabelDecoder = L"Görüntü çözücü";
+inline constexpr const wchar_t* kLabelReset   = L"Bağlantı zaman aşımı";
 inline constexpr const wchar_t* kLabelAudio = L"Ses çıkışı";
 
 inline constexpr const wchar_t* kChkFullscreen  = L"Tam ekran";
@@ -61,6 +62,13 @@ inline constexpr const wchar_t* kDecAuto  = L"Otomatik";
 inline constexpr const wchar_t* kDecD3D11 = L"Direct3D 11 (sink ile aynı)";
 inline constexpr const wchar_t* kDecNv    = L"NVIDIA NVDEC";
 inline constexpr const wchar_t* kDecSw    = L"Yazılım (avdec_h264)";
+
+// How long the client may stay silent before UxPlay declares the connection lost
+// (-reset n). A locked iPhone goes quiet, so a short limit ends the session while the
+// phone is merely in a pocket.
+inline constexpr const wchar_t* kReset0  = L"Kapalı (telefon uykuda kalabilir)";
+inline constexpr const wchar_t* kReset15 = L"15 saniye";
+inline constexpr const wchar_t* kReset60 = L"60 saniye";
 
 // --- buttons / sections -----------------------------------------------------
 inline constexpr const wchar_t* kBtnStart    = L"Başlat";

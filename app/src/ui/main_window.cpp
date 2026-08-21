@@ -29,6 +29,8 @@ enum : int {
     IDC_CMB_FPS,
     IDC_LBL_DECODER,
     IDC_CMB_DECODER,
+    IDC_LBL_RESET,
+    IDC_CMB_RESET,
     IDC_CHK_FPSDATA,
     IDC_CHK_FULLSCREEN,
     IDC_CHK_H265,
@@ -54,6 +56,10 @@ const int            kFpsValues[] = {60, 30};
 const wchar_t* const kDecoderLabels[] = {str::kDecAuto, str::kDecD3D11, str::kDecNv,
                                          str::kDecSw};
 const wchar_t* const kDecoderValues[] = {L"", L"d3d11h264dec", L"nvh264dec", L"avdec_h264"};
+
+// -reset n: how long the client may stay silent. Index-matched pairs.
+const wchar_t* const kResetLabels[] = {str::kReset0, str::kReset15, str::kReset60};
+const int            kResetValues[] = {0, 15, 60};
 
 UINT dpiForWindow(HWND hwnd) {
     using Fn = UINT(WINAPI*)(HWND);
@@ -297,6 +303,9 @@ void MainWindow::createControls() {
 
     lblFps_     = mk(L"STATIC", str::kLabelFps, SS_LEFT, IDC_LBL_FPS);
     cmbFps_     = mk(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, IDC_CMB_FPS);
+    lblReset_   = mk(L"STATIC", str::kLabelReset, SS_LEFT, IDC_LBL_RESET);
+    cmbReset_   = mk(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP,
+                     IDC_CMB_RESET);
     lblDecoder_ = mk(L"STATIC", str::kLabelDecoder, SS_LEFT, IDC_LBL_DECODER);
     cmbDecoder_ = mk(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP,
                      IDC_CMB_DECODER);
@@ -305,6 +314,8 @@ void MainWindow::createControls() {
         SendMessageW(cmbFps_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(f));
     for (const wchar_t* d : kDecoderLabels)
         SendMessageW(cmbDecoder_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(d));
+    for (const wchar_t* r : kResetLabels)
+        SendMessageW(cmbReset_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(r));
 
     for (const wchar_t* v : kVideoSinks)
         SendMessageW(cmbVideo_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(v));
@@ -345,6 +356,7 @@ void MainWindow::createControls() {
                   editPort_,   lblVideo_,       cmbVideo_,      lblAudio_,      cmbAudio_,
                   chkFullscreen_, chkH265_,     chkDebug_,      chkAlwaysOnTop_, chkAutostart_,
                   lblFps_,     cmbFps_,         lblDecoder_,    cmbDecoder_,    chkFpsData_,
+                  lblReset_,   cmbReset_,
                   btnToggle_,  btnCopy_,        secAdvanced_,   secDetails_,    listLog_};
     for (HWND h : all)
         if (h) SendMessageW(h, WM_SETFONT, reinterpret_cast<WPARAM>(fontUi_), TRUE);
@@ -398,6 +410,9 @@ void MainWindow::layout() {
         y += s(30);
         place(lblAudio_, m, y + s(5), s(88), s(16));
         place(cmbAudio_, m + s(92), y, s(170), s(220));
+        y += s(30);
+        place(lblReset_, m, y + s(5), s(120), s(16));
+        place(cmbReset_, m + s(124), y, s(220), s(220));
         y += s(32);
         place(chkFullscreen_, m, y, s(88), s(20));
         place(chkH265_, m + s(92), y, s(62), s(20));
@@ -428,8 +443,9 @@ void MainWindow::layout() {
 void MainWindow::applySectionVisibility() {
     const int adv = showAdvanced_ ? SW_SHOW : SW_HIDE;
     for (HWND h : {lblPort_, editPort_, lblFps_, cmbFps_, lblVideo_, cmbVideo_, lblDecoder_,
-                   cmbDecoder_, lblAudio_, cmbAudio_, chkFullscreen_, chkH265_, chkDebug_,
-                   chkFpsData_, chkAlwaysOnTop_, chkAutostart_, btnCopy_})
+                   cmbDecoder_, lblAudio_, cmbAudio_, lblReset_, cmbReset_, chkFullscreen_,
+                   chkH265_, chkDebug_, chkFpsData_, chkAlwaysOnTop_, chkAutostart_,
+                   btnCopy_})
         if (h) ShowWindow(h, adv);
     if (listLog_) ShowWindow(listLog_, showDetails_ ? SW_SHOW : SW_HIDE);
 
@@ -513,6 +529,11 @@ void MainWindow::controlsFromConfig() {
         if (cfg_.videoDecoder == kDecoderValues[i]) decIdx = i;
     SendMessageW(cmbDecoder_, CB_SETCURSEL, static_cast<WPARAM>(decIdx), 0);
 
+    int resetIdx = 0;
+    for (int i = 0; i < static_cast<int>(ARRAYSIZE(kResetValues)); ++i)
+        if (kResetValues[i] == cfg_.resetSeconds) resetIdx = i;
+    SendMessageW(cmbReset_, CB_SETCURSEL, static_cast<WPARAM>(resetIdx), 0);
+
     setChecked(chkFpsData_, cfg_.fpsData);
     setChecked(chkFullscreen_, cfg_.fullscreen);
     setChecked(chkH265_, cfg_.h265);
@@ -540,6 +561,10 @@ void MainWindow::configFromControls() {
     i = static_cast<int>(SendMessageW(cmbDecoder_, CB_GETCURSEL, 0, 0));
     if (i >= 0 && i < static_cast<int>(ARRAYSIZE(kDecoderValues)))
         cfg_.videoDecoder = kDecoderValues[i];
+
+    i = static_cast<int>(SendMessageW(cmbReset_, CB_GETCURSEL, 0, 0));
+    if (i >= 0 && i < static_cast<int>(ARRAYSIZE(kResetValues)))
+        cfg_.resetSeconds = kResetValues[i];
 
     cfg_.fpsData           = isChecked(chkFpsData_);
     cfg_.fullscreen        = isChecked(chkFullscreen_);
@@ -609,7 +634,7 @@ void MainWindow::updateButtons() {
     // Receiver settings only take effect on (re)start - see DESIGN 6.1 limitations.
     const BOOL editable = running ? FALSE : TRUE;
     for (HWND h : {editName_, editPort_, cmbVideo_, cmbAudio_, cmbFps_, cmbDecoder_,
-                   chkFullscreen_, chkH265_, chkDebug_, chkFpsData_})
+                   cmbReset_, chkFullscreen_, chkH265_, chkDebug_, chkFpsData_})
         EnableWindow(h, editable);
 }
 
@@ -1007,7 +1032,8 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
             createFonts();
             for (HWND h : {status_, hint_, lblName_, editName_, lblPort_, editPort_,
                            lblVideo_, cmbVideo_, lblAudio_, cmbAudio_, lblFps_, cmbFps_,
-                           lblDecoder_, cmbDecoder_, chkFpsData_, chkFullscreen_,
+                           lblDecoder_, cmbDecoder_, lblReset_, cmbReset_, chkFpsData_,
+                           chkFullscreen_,
                            chkH265_, chkDebug_, chkAlwaysOnTop_, chkAutostart_,
                            btnToggle_, btnCopy_, secAdvanced_, secDetails_, listLog_})
                 if (h) SendMessageW(h, WM_SETFONT, reinterpret_cast<WPARAM>(fontUi_), TRUE);

@@ -75,6 +75,7 @@ private:
     HWND lblAudio_ = nullptr, cmbAudio_ = nullptr;
     HWND lblFps_ = nullptr, cmbFps_ = nullptr;
     HWND lblDecoder_ = nullptr, cmbDecoder_ = nullptr;
+    HWND lblReset_ = nullptr, cmbReset_ = nullptr;
     HWND chkFullscreen_ = nullptr, chkH265_ = nullptr, chkDebug_ = nullptr;
     HWND chkFpsData_ = nullptr;
     HWND chkAlwaysOnTop_ = nullptr, chkAutostart_ = nullptr;

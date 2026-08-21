@@ -46,7 +46,10 @@ struct AppConfig {
     bool         h265         = false;
     bool         debug        = false;         // required for Resolution events (DESIGN 6.1)
     bool         noHold       = true;
-    int          resetSeconds = 15;            // 0 disables
+    int          resetSeconds = 0;             // -reset n; 0 = no timeout at all.
+                                               // A locked iPhone stops sending feedback,
+                                               // and any limit would end the session
+                                               // while the phone is just asleep.
     int          maxFps       = 60;            // -fps; 0 = UxPlay default (30, raop.c:623)
     std::wstring videoDecoder;                 // -vd; empty = decodebin (picks by rank)
     bool         fpsData      = false;         // -FPSdata; client reports into the log
