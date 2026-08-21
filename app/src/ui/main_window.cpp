@@ -94,6 +94,26 @@ COLORREF stateColor(airplay::HostState st) {
     }
 }
 
+// EnumWindows payload: the first top-level, unowned window belonging to the child process.
+struct VideoWindowSearch {
+    DWORD pid   = 0;
+    HWND  found = nullptr;
+};
+
+BOOL CALLBACK findVideoWindowProc(HWND h, LPARAM lp) {
+    auto* c = reinterpret_cast<VideoWindowSearch*>(lp);
+    DWORD pid = 0;
+    GetWindowThreadProcessId(h, &pid);
+    if (pid != c->pid) return TRUE;
+    if (GetWindow(h, GW_OWNER) != nullptr) return TRUE;   // tooltips and owned popups
+    // uxplay.exe owns a hidden top-level window of its own from the moment it starts (its
+    // title is the exe path), long before any client connects. Only a visible window can be
+    // the video one - which is also why the handle we hide is remembered separately.
+    if (!IsWindowVisible(h)) return TRUE;
+    c->found = h;
+    return FALSE;                                          // stop at the first match
+}
+
 bool isChecked(HWND h) { return SendMessageW(h, BM_GETCHECK, 0, 0) == BST_CHECKED; }
 void setChecked(HWND h, bool on) {
     SendMessageW(h, BM_SETCHECK, on ? BST_CHECKED : BST_UNCHECKED, 0);
@@ -423,6 +443,32 @@ void MainWindow::applySectionVisibility() {
                         str::kSecDetails).c_str());
 }
 
+HWND MainWindow::findVideoWindow() const {
+    const DWORD pid = host_.pid();
+    if (!pid) return nullptr;
+    VideoWindowSearch c;
+    c.pid = pid;
+    // Hidden windows are enumerated too, which is what lets us bring ours back.
+    EnumWindows(&findVideoWindowProc, reinterpret_cast<LPARAM>(&c));
+    return c.found;
+}
+
+void MainWindow::applyMirrorVisibility() {
+    if (mirrorStalled_) {
+        HWND v = findVideoWindow();
+        if (!v) return;
+        videoWindow_ = v;          // remember it: once hidden it is no longer findable
+        ShowWindow(v, SW_HIDE);
+        return;
+    }
+    if (videoWindow_ && IsWindow(videoWindow_)) {
+        // SW_SHOWNA: give the picture back without stealing focus from whatever the user is
+        // doing on the PC while the phone was asleep.
+        ShowWindow(videoWindow_, SW_SHOWNA);
+    }
+    videoWindow_ = nullptr;
+}
+
 int MainWindow::chromeHeight() const {
     RECT r{0, 0, 100, 100};
     AdjustWindowRectEx(&r, WS_OVERLAPPEDWINDOW, FALSE, 0);
@@ -523,6 +569,11 @@ void MainWindow::updateStatus() {
             if (!ipv4_.empty()) hint += L" (" + ipv4_ + L")";
             break;
         case airplay::HostState::Connected:
+            if (mirrorStalled_) {
+                text = str::kStateStalled;
+                hint = str::kHintStalled;
+                break;
+            }
             text = str::kStateConnected;
             hint = clientName_.empty() ? std::wstring(str::kHintUnknownClient) : clientName_;
             if (!clientModel_.empty()) hint += L" (" + clientModel_ + L")";
@@ -692,6 +743,9 @@ void MainWindow::onHostEvent(const airplay::HostEvent& ev) {
                 layout();
                 resizeToContent();
             }
+            if (state_ != airplay::HostState::Connected && mirrorStalled_) {
+                mirrorStalled_ = false;   // no session, nothing to unhide later
+            }
             if (state_ == airplay::HostState::Waiting) {
                 ipv4_ = firstLocalIPv4();
                 clientName_.clear();
@@ -742,9 +796,13 @@ void MainWindow::onHostEvent(const airplay::HostEvent& ev) {
             break;
 
         case K::MirrorStalled:
-            // The client went quiet (locked iPhone). Handled in the next commit; for now it
-            // only reaches the log, and deliberately not as an error.
-            logUi(L"mirror stalled: " + widen(ev.message));
+            lastStallTick_ = GetTickCount();
+            if (!mirrorStalled_) {
+                mirrorStalled_ = true;
+                applyMirrorVisibility();
+                updateStatus();
+                logUi(L"mirror stalled: client stopped requesting feedback");
+            }
             break;
 
         case K::Warning:
@@ -844,6 +902,7 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
             resizeToContent();
 
             tray_.add(hwnd_, WM_TRAY);
+            SetTimer(hwnd_, kStallTimer, 1000, nullptr);
 
             // The reader thread is not allowed to touch HWNDs; hand the event over by post.
             HWND target = hwnd_;
@@ -858,6 +917,19 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
             updateButtons();
             return 0;
         }
+
+        case WM_TIMER:
+            // The stall ends by absence: the child simply stops printing the line. Two and a
+            // half seconds without one means the phone is awake again (uxplay prints it once
+            // a second, uxplay.cpp:535-556).
+            if (wp == kStallTimer && mirrorStalled_ &&
+                GetTickCount() - lastStallTick_ > 2500) {
+                mirrorStalled_ = false;
+                applyMirrorVisibility();
+                updateStatus();
+                logUi(L"mirror resumed: client feedback is back");
+            }
+            return 0;
 
         case WM_HOST_EVENT: {
             auto* ev = reinterpret_cast<airplay::HostEvent*>(lp);
@@ -894,7 +966,10 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
             const int d = s(13);
             const int x = s(14);
             const int yy = s(12) + (s(28) - d) / 2;
-            const COLORREF c = stateColor(state_);
+            // A stall is not an error state of its own; it borrows the transient colour.
+            const COLORREF c = (mirrorStalled_ && state_ == airplay::HostState::Connected)
+                                   ? stateColor(airplay::HostState::Stopping)
+                                   : stateColor(state_);
             HBRUSH br = CreateSolidBrush(c);
             HPEN   pen = CreatePen(PS_SOLID, 1, c);
             HGDIOBJ oldBr = SelectObject(dc, br);
@@ -970,6 +1045,7 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
 
         case WM_DESTROY:
+            KillTimer(hwnd_, kStallTimer);
             host_.setCallback(nullptr);
             host_.stop();
             tray_.remove();
