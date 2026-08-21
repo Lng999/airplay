@@ -47,6 +47,9 @@ struct AppConfig {
     bool         debug        = false;         // required for Resolution events (DESIGN 6.1)
     bool         noHold       = true;
     int          resetSeconds = 15;            // 0 disables
+    int          maxFps       = 60;            // -fps; 0 = UxPlay default (30, raop.c:623)
+    std::wstring videoDecoder;                 // -vd; empty = decodebin (picks by rank)
+    bool         fpsData      = false;         // -FPSdata; client reports into the log
 
     // [app]
     bool         alwaysOnTop       = false;
