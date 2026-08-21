@@ -44,6 +44,7 @@ add_executable(airplay-gui WIN32
     src/ui/tray.cpp
     src/ui/config_store.cpp
     src/ui/audio_mute.cpp
+    src/ui/stale_receivers.cpp
     src/ui/single_instance.cpp
     src/ui/ui_log.cpp
     res/app.rc

@@ -10,6 +10,7 @@
 
 #include "audio_mute.h"
 #include "single_instance.h"
+#include "stale_receivers.h"
 #include "strings.h"
 
 namespace ui {
@@ -678,6 +679,14 @@ void MainWindow::doStart() {
         logUi(lastError_);
         MessageBoxW(hwnd_, lastError_.c_str(), str::kAppName, MB_ICONERROR | MB_OK);
         return;
+    }
+
+    // A receiver we do not own would keep listening on the same port (SO_REUSEADDR) and the
+    // phone could connect to it instead of to our child, leaving the GUI blind.
+    if (const int stale = killStaleReceivers(cfg_.uxplayPath)) {
+        wchar_t note[96];
+        _snwprintf(note, 96, L"terminated %d stale uxplay.exe before starting", stale);
+        logUi(note);
     }
 
     airplay::HostConfig hc = ConfigStore::toHostConfig(cfg_);
