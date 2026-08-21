@@ -480,7 +480,8 @@ void MainWindow::updateStatus() {
             break;
         case airplay::HostState::Error:
             text = str::kStateError;
-            hint = lastError_.empty() ? std::wstring(str::kHintUnknownError) : lastError_;
+            hint = lastError_.empty() ? std::wstring(str::kHintUnknownError)
+                                      : std::wstring(str::kHintErrorPrefix) + lastError_;
             break;
     }
     SetWindowTextW(status_, text.c_str());
@@ -629,6 +630,15 @@ void MainWindow::onHostEvent(const airplay::HostEvent& ev) {
             state_ = ev.state;
             if (state_ == airplay::HostState::Error && !ev.message.empty())
                 lastError_ = widen(ev.message);
+            // The cause is a log line the user cannot see while Details is collapsed, and a
+            // one-line hint always truncates it. Open the section for them - only for this
+            // session, so it is not written back to config.ini as a preference.
+            if (state_ == airplay::HostState::Error && !showDetails_) {
+                showDetails_ = true;
+                applySectionVisibility();
+                layout();
+                resizeToContent();
+            }
             if (state_ == airplay::HostState::Waiting) {
                 ipv4_ = firstLocalIPv4();
                 clientName_.clear();

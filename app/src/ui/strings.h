@@ -32,6 +32,7 @@ inline constexpr const wchar_t* kHintStopped   = L"Alıcıyı başlatmak için B
 inline constexpr const wchar_t* kHintWaitingPre= L"iPhone: Denetim Merkezi → Ekran Yansıtma → ";
 inline constexpr const wchar_t* kHintUnknownClient = L"Bir cihaz bağlandı";
 inline constexpr const wchar_t* kHintUnknownError  = L"Bilinmeyen hata";
+inline constexpr const wchar_t* kHintErrorPrefix   = L"Alıcı kapandı: ";
 
 // --- receiver settings ------------------------------------------------------
 inline constexpr const wchar_t* kLabelName  = L"Bu bilgisayarın adı:";
