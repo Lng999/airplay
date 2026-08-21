@@ -7,3 +7,13 @@ Durum (2026-08-20): Phase 0 tamam (MSYS2/UCRT64 build + duman testi yeşil), Pha
 Tek tıkla çalıştırma: **`AirPlay.bat`** (çift tıkla; parametre geçirilebilir: `AirPlay.bat -Name "Salon-PC" -Debug`).
 
 Hızlı başlangıç: `scripts/setup-msys2.ps1` → `scripts/build.sh` (UCRT64) → `scripts/build-app.sh` → `build-app/airplay-gui.exe` (veya `scripts/run-uxplay.ps1`).
+
+## Başka bir bilgisayara taşımak
+
+Depoyu kopyalamak yetmez: `uxplay.exe` bir MinGW ikilisidir, çalışmak için `C:\msys64\ucrt64` altındaki DLL'lere ve GStreamer eklentilerine ihtiyaç duyar. Karşı makinede MSYS2 olmadığı için uygulama **"uxplay.exe bulunamadı"** der. Çözüm, çalışma zamanını yanına alan bir paket üretmektir:
+
+```powershell
+pwsh -File scripts/make-portable.ps1 -Archive
+```
+
+Çıktı `dist\airplay-portable\` (ve `.zip`): iki exe + `ucrt64\` ağacı, ~232 MB. Klasörü olduğu gibi kopyalayın, `Baslat.bat` ile açın — kurulum gerekmez. Detay: `scripts/README.md`.

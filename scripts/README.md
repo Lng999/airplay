@@ -10,6 +10,7 @@ firewall, launch the receiver. Run them in this order.
 | 3 | `pwsh -File scripts/firewall-rules.ps1` *(elevated)* | Creates the inbound rules the iPhone needs. |
 | 4 | `pwsh -File scripts/run-uxplay.ps1` | Launches `uxplay.exe` with PATH, `HOME` and GStreamer env prepared. |
 | 5 | `pwsh -File scripts/smoke-test.ps1` | Device-free checks (GStreamer plugins, mDNS announcement). |
+| 6 | `pwsh -File scripts/make-portable.ps1` | Packs `dist\airplay-portable\` — both exes plus the whole ucrt64 runtime, so the folder runs on a PC with no MSYS2. |
 
 ## Details
 
@@ -31,6 +32,18 @@ firewall, launch the receiver. Run them in this order.
 - **firewall-rules.ps1** — elevated. `-ExePath`, `-Port`, `-Remove`. Every rule it creates
   is prefixed `airplay:`; it deletes that whole set before recreating it, so re-running is
   safe. Keep `-Port` in sync with `run-uxplay.ps1`.
+- **make-portable.ps1** — `-MsysRoot <path>` (default `C:\msys64`), `-OutDir <path>` (default
+  `dist\airplay-portable`, wiped first), `-Archive` to also write the `.zip`. Needs both
+  builds done. Takes about a minute: it runs `objdump -p` over all of `ucrt64\bin` and every
+  GStreamer plugin, then copies the transitive import closure. Nothing is hardcoded, so a
+  `pacman -Syu` that pulls in a new dependency is picked up by the next run; Windows' own
+  DLLs are deliberately left behind. Result: ~207 DLLs, ~232 MB, 454 files.
+
+  The target machine needs nothing installed. `airplay-gui.exe` finds `uxplay.exe` beside it
+  and takes `<exe dir>` as the runtime root because `<exe dir>\ucrt64\bin` exists
+  (`app/src/ui/config_store.cpp` `defaultMsysRoot()`). What still has to happen there by hand
+  is the firewall: answer the first-run prompt for **private** networks, and keep the adapter
+  on the Private profile.
 
 ## Manual verification
 
