@@ -234,15 +234,15 @@ void MainWindow::createControls() {
     status_ = mk(L"STATIC", str::kStateStopped, SS_LEFT | SS_ENDELLIPSIS, IDC_STATUS);
     hint_   = mk(L"STATIC", str::kHintStopped, SS_LEFT | SS_ENDELLIPSIS, IDC_HINT);
 
-    lblName_  = mk(L"STATIC", L"Name", SS_LEFT, IDC_LBL_NAME);
+    lblName_  = mk(L"STATIC", str::kLabelName, SS_LEFT, IDC_LBL_NAME);
     editName_ = mk(L"EDIT", L"", ES_AUTOHSCROLL | WS_TABSTOP, IDC_EDIT_NAME, WS_EX_CLIENTEDGE);
-    lblPort_  = mk(L"STATIC", L"Port", SS_LEFT, IDC_LBL_PORT);
+    lblPort_  = mk(L"STATIC", str::kLabelPort, SS_LEFT, IDC_LBL_PORT);
     editPort_ = mk(L"EDIT", L"", ES_AUTOHSCROLL | ES_NUMBER | WS_TABSTOP, IDC_EDIT_PORT,
                    WS_EX_CLIENTEDGE);
 
-    lblVideo_ = mk(L"STATIC", L"Video", SS_LEFT, IDC_LBL_VIDEO);
+    lblVideo_ = mk(L"STATIC", str::kLabelVideo, SS_LEFT, IDC_LBL_VIDEO);
     cmbVideo_ = mk(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, IDC_CMB_VIDEO);
-    lblAudio_ = mk(L"STATIC", L"Audio", SS_LEFT, IDC_LBL_AUDIO);
+    lblAudio_ = mk(L"STATIC", str::kLabelAudio, SS_LEFT, IDC_LBL_AUDIO);
     cmbAudio_ = mk(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP, IDC_CMB_AUDIO);
 
     for (const wchar_t* v : kVideoSinks)
@@ -250,13 +250,14 @@ void MainWindow::createControls() {
     for (const wchar_t* a : kAudioSinks)
         SendMessageW(cmbAudio_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(a));
 
-    chkFullscreen_  = mk(L"BUTTON", L"Fullscreen", BS_AUTOCHECKBOX | WS_TABSTOP,
+    chkFullscreen_  = mk(L"BUTTON", str::kChkFullscreen, BS_AUTOCHECKBOX | WS_TABSTOP,
                          IDC_CHK_FULLSCREEN);
-    chkH265_        = mk(L"BUTTON", L"H.265", BS_AUTOCHECKBOX | WS_TABSTOP, IDC_CHK_H265);
-    chkDebug_       = mk(L"BUTTON", L"Debug log", BS_AUTOCHECKBOX | WS_TABSTOP, IDC_CHK_DEBUG);
-    chkAlwaysOnTop_ = mk(L"BUTTON", L"Always on top", BS_AUTOCHECKBOX | WS_TABSTOP,
+    chkH265_        = mk(L"BUTTON", str::kChkH265, BS_AUTOCHECKBOX | WS_TABSTOP, IDC_CHK_H265);
+    chkDebug_       = mk(L"BUTTON", str::kChkDebug, BS_AUTOCHECKBOX | WS_TABSTOP,
+                         IDC_CHK_DEBUG);
+    chkAlwaysOnTop_ = mk(L"BUTTON", str::kChkAlwaysOnTop, BS_AUTOCHECKBOX | WS_TABSTOP,
                          IDC_CHK_ALWAYSONTOP);
-    chkAutostart_   = mk(L"BUTTON", L"Start receiver on launch", BS_AUTOCHECKBOX | WS_TABSTOP,
+    chkAutostart_   = mk(L"BUTTON", str::kChkAutostart, BS_AUTOCHECKBOX | WS_TABSTOP,
                          IDC_CHK_AUTOSTART);
 
     btnToggle_ = mk(L"BUTTON", str::kBtnStart, BS_DEFPUSHBUTTON | WS_TABSTOP, IDC_BTN_TOGGLE);
@@ -284,45 +285,52 @@ void MainWindow::layout() {
     GetClientRect(hwnd_, &rc);
     const int W = rc.right - rc.left;
     const int H = rc.bottom - rc.top;
-    const int m = s(12);
+    const int m = s(14);
     const int contentW = W - 2 * m;
 
     auto place = [](HWND h, int x, int y, int w, int hh) {
         if (h) SetWindowPos(h, nullptr, x, y, w, hh, SWP_NOZORDER | SWP_NOACTIVATE);
     };
 
-    place(status_, m, s(10), contentW, s(30));
-    place(hint_, m, s(42), contentW, s(18));
+    // Single top-to-bottom flow: what the user needs first is highest up, and the groups
+    // below it can be hidden without any of the coordinates above changing.
+    int y = s(12);
+    place(status_, m, y, contentW, s(28));
+    y += s(30);
+    place(hint_, m, y, contentW, s(18));
+    y += s(32);
 
-    int y = s(66);
-    place(lblName_, m, y + s(5), s(44), s(16));
-    place(editName_, m + s(48), y, s(150), s(23));
-    place(lblPort_, m + s(210), y + s(5), s(34), s(16));
-    place(editPort_, m + s(248), y, s(64), s(23));
+    place(lblName_, m, y + s(5), s(132), s(16));
+    place(editName_, m + s(136), y, s(180), s(24));
+    y += s(38);
 
-    y = s(96);
-    place(lblVideo_, m, y + s(5), s(44), s(16));
-    place(cmbVideo_, m + s(48), y, s(150), s(220));
-    place(lblAudio_, m + s(210), y + s(5), s(38), s(16));
-    place(cmbAudio_, m + s(252), y, s(160), s(220));
+    place(btnToggle_, m, y, s(160), s(34));
+    y += s(48);
 
-    y = s(128);
-    place(chkFullscreen_, m, y, s(96), s(20));
-    place(chkH265_, m + s(100), y, s(72), s(20));
-    place(chkDebug_, m + s(176), y, s(100), s(20));
+    // --- advanced group ---
+    place(lblPort_, m, y + s(5), s(36), s(16));
+    place(editPort_, m + s(40), y, s(70), s(24));
+    y += s(32);
+    place(lblVideo_, m, y + s(5), s(88), s(16));
+    place(cmbVideo_, m + s(92), y, s(170), s(220));
+    y += s(30);
+    place(lblAudio_, m, y + s(5), s(88), s(16));
+    place(cmbAudio_, m + s(92), y, s(170), s(220));
+    y += s(32);
+    place(chkFullscreen_, m, y, s(88), s(20));
+    place(chkH265_, m + s(92), y, s(62), s(20));
+    place(chkDebug_, m + s(158), y, s(122), s(20));
+    y += s(24);
+    place(chkAlwaysOnTop_, m, y, s(118), s(20));
+    place(chkAutostart_, m + s(124), y, s(170), s(20));
+    y += s(28);
+    place(btnCopy_, m, y, s(140), s(28));
+    y += s(38);
 
-    y = s(152);
-    place(chkAlwaysOnTop_, m, y, s(114), s(20));
-    place(chkAutostart_, m + s(120), y, s(200), s(20));
-
-    y = s(180);
-    place(btnToggle_, m, y, s(150), s(30));
-    place(btnCopy_, m + s(158), y, s(130), s(30));
-
-    const int listTop = s(216);
-    int listH = H - listTop - m;
-    if (listH < s(40)) listH = s(40);
-    place(listLog_, m, listTop, contentW, listH);
+    // --- log ---
+    int listH = H - y - m;
+    if (listH < s(60)) listH = s(60);
+    place(listLog_, m, y, contentW, listH);
 
     InvalidateRect(hwnd_, nullptr, TRUE);
 }
@@ -671,7 +679,7 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
             controlsFromConfig();
 
             if (cfg_.w < 200 || cfg_.h < 200)
-                SetWindowPos(hwnd_, nullptr, 0, 0, s(460), s(420),
+                SetWindowPos(hwnd_, nullptr, 0, 0, s(470), s(540),
                              SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
             layout();
 
@@ -732,8 +740,8 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
 
         case WM_GETMINMAXINFO: {
             auto* mmi = reinterpret_cast<MINMAXINFO*>(lp);
-            mmi->ptMinTrackSize.x = s(440);
-            mmi->ptMinTrackSize.y = s(340);
+            mmi->ptMinTrackSize.x = s(450);
+            mmi->ptMinTrackSize.y = s(420);
             return 0;
         }
 
