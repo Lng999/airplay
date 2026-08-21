@@ -8,7 +8,6 @@
 #include <cstdio>
 #include <vector>
 
-#include "audio_mute.h"
 #include "../res/resource.h"
 #include "single_instance.h"
 #include "stale_receivers.h"
@@ -100,26 +99,6 @@ COLORREF stateColor(airplay::HostState st) {
         case airplay::HostState::Stopped:
         default:                            return RGB(0x96, 0x96, 0x96);   // grey: idle
     }
-}
-
-// EnumWindows payload: the first top-level, unowned window belonging to the child process.
-struct VideoWindowSearch {
-    DWORD pid   = 0;
-    HWND  found = nullptr;
-};
-
-BOOL CALLBACK findVideoWindowProc(HWND h, LPARAM lp) {
-    auto* c = reinterpret_cast<VideoWindowSearch*>(lp);
-    DWORD pid = 0;
-    GetWindowThreadProcessId(h, &pid);
-    if (pid != c->pid) return TRUE;
-    if (GetWindow(h, GW_OWNER) != nullptr) return TRUE;   // tooltips and owned popups
-    // uxplay.exe owns a hidden top-level window of its own from the moment it starts (its
-    // title is the exe path), long before any client connects. Only a visible window can be
-    // the video one - which is also why the handle we hide is remembered separately.
-    if (!IsWindowVisible(h)) return TRUE;
-    c->found = h;
-    return FALSE;                                          // stop at the first match
 }
 
 bool isChecked(HWND h) { return SendMessageW(h, BM_GETCHECK, 0, 0) == BST_CHECKED; }
@@ -461,47 +440,6 @@ void MainWindow::applySectionVisibility() {
                         str::kSecDetails).c_str());
 }
 
-HWND MainWindow::findVideoWindow() const {
-    const DWORD pid = host_.pid();
-    if (!pid) return nullptr;
-    VideoWindowSearch c;
-    c.pid = pid;
-    // Hidden windows are enumerated too, which is what lets us bring ours back.
-    EnumWindows(&findVideoWindowProc, reinterpret_cast<LPARAM>(&c));
-    return c.found;
-}
-
-void MainWindow::setStalled(bool stalled) {
-    lastFpsTick_ = GetTickCount();
-    if (stalled == mirrorStalled_) return;
-    mirrorStalled_ = stalled;
-    applyMirrorVisibility();
-    updateStatus();
-    logUi(stalled ? L"mirror stalled: no frames from the client (screen off)"
-                  : L"mirror resumed: frames are arriving again");
-}
-
-void MainWindow::applyMirrorVisibility() {
-    if (!cfg_.hideWhenStalled) return;
-    // Audio keeps flowing while the phone sleeps, so hiding the picture alone would leave a
-    // disembodied sound. Muting the child's session is independent of the video window and
-    // is a no-op if it has no session yet.
-    setProcessMuted(host_.pid(), mirrorStalled_);
-    if (mirrorStalled_) {
-        HWND v = findVideoWindow();
-        if (!v) return;
-        videoWindow_ = v;          // remember it: once hidden it is no longer findable
-        ShowWindow(v, SW_HIDE);
-        return;
-    }
-    if (videoWindow_ && IsWindow(videoWindow_)) {
-        // SW_SHOWNA: give the picture back without stealing focus from whatever the user is
-        // doing on the PC while the phone was asleep.
-        ShowWindow(videoWindow_, SW_SHOWNA);
-    }
-    videoWindow_ = nullptr;
-}
-
 int MainWindow::chromeHeight() const {
     RECT r{0, 0, 100, 100};
     AdjustWindowRectEx(&r, WS_OVERLAPPEDWINDOW, FALSE, 0);
@@ -609,11 +547,6 @@ void MainWindow::updateStatus() {
             if (!ipv4_.empty()) hint += L" (" + ipv4_ + L")";
             break;
         case airplay::HostState::Connected:
-            if (mirrorStalled_) {
-                text = str::kStateStalled;
-                hint = str::kHintStalled;
-                break;
-            }
             text = str::kStateConnected;
             hint = clientName_.empty() ? std::wstring(str::kHintUnknownClient) : clientName_;
             if (!clientModel_.empty()) hint += L" (" + clientModel_ + L")";
@@ -796,11 +729,7 @@ void MainWindow::onHostEvent(const airplay::HostEvent& ev) {
                 layout();
                 resizeToContent();
             }
-            if (state_ != airplay::HostState::Connected) {
-                mirrorStalled_  = false;   // no session, nothing to unhide later
-                zeroFpsReports_ = 0;
-                currentFps_     = 0;
-            }
+            if (state_ != airplay::HostState::Connected) currentFps_ = 0;
             if (state_ == airplay::HostState::Waiting) {
                 ipv4_ = firstLocalIPv4();
                 clientName_.clear();
@@ -850,27 +779,21 @@ void MainWindow::onHostEvent(const airplay::HostEvent& ev) {
                         str::kAppName, MB_ICONINFORMATION | MB_OK);
             break;
 
-        // Fast path (patches/0004): the receiver itself watches the frame timestamps and
-        // says so within ~400 ms. This is what the user sees react.
+        // The receiver reports the video stream going quiet and coming back (patches/0004).
+        // Nothing acts on it: a phone with its screen off is still a live session, and the
+        // window stays exactly as it is until the user stops the receiver.
         case K::MirrorActivity:
-            setStalled(ev.srcWidth == 0);
             break;
 
-        // Slow path: the client's own once-a-second reports. Kept as the frame-rate readout
-        // and as a backstop if the receiver is ever built without patch 0004.
-        case K::MirrorFps: {
-            lastFpsTick_ = GetTickCount();
-            if (ev.srcWidth == 0) {
-                // Two in a row, so a single dropped report cannot blink the window away.
-                if (++zeroFpsReports_ >= 2) setStalled(true);
-                break;
+        // The client's own once-a-second -FPSdata report, used only for the fps readout.
+        // It reads 0 while the screen is off; keep the last real figure rather than blinking
+        // the status line between "60 fps" and nothing.
+        case K::MirrorFps:
+            if (ev.srcWidth > 0) {
+                currentFps_ = ev.srcWidth;
+                updateStatus();
             }
-            zeroFpsReports_ = 0;
-            currentFps_ = ev.srcWidth;
-            setStalled(false);
-            updateStatus();
             break;
-        }
 
         case K::Warning:
             logUi(L"WARNING: " + widen(ev.message));
@@ -973,7 +896,6 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
             resizeToContent();
 
             tray_.add(hwnd_, WM_TRAY);
-            SetTimer(hwnd_, kStallTimer, 1000, nullptr);
 
             // The reader thread is not allowed to touch HWNDs; hand the event over by post.
             HWND target = hwnd_;
@@ -988,19 +910,6 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
             updateButtons();
             return 0;
         }
-
-        case WM_TIMER:
-            // Safety net only. The stall itself is decided by the reports; this catches the
-            // case where they stop altogether (a client that really went away), which must
-            // not leave the video window hidden with no way back.
-            if (wp == kStallTimer && mirrorStalled_ &&
-                GetTickCount() - lastFpsTick_ > 10000) {
-                mirrorStalled_ = false;
-                applyMirrorVisibility();
-                updateStatus();
-                logUi(L"mirror unhidden: no reports for 10 s, not keeping the window hidden");
-            }
-            return 0;
 
         case WM_HOST_EVENT: {
             auto* ev = reinterpret_cast<airplay::HostEvent*>(lp);
@@ -1037,10 +946,7 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
             const int d = s(13);
             const int x = s(14);
             const int yy = s(12) + (s(28) - d) / 2;
-            // A stall is not an error state of its own; it borrows the transient colour.
-            const COLORREF c = (mirrorStalled_ && state_ == airplay::HostState::Connected)
-                                   ? stateColor(airplay::HostState::Stopping)
-                                   : stateColor(state_);
+            const COLORREF c = stateColor(state_);
             HBRUSH br = CreateSolidBrush(c);
             HPEN   pen = CreatePen(PS_SOLID, 1, c);
             HGDIOBJ oldBr = SelectObject(dc, br);
@@ -1117,7 +1023,6 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
 
         case WM_DESTROY:
-            KillTimer(hwnd_, kStallTimer);
             host_.setCallback(nullptr);
             host_.stop();
             tray_.remove();

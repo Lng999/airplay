@@ -38,11 +38,6 @@ private:
     void createFonts();
     void layout();
     void applySectionVisibility();
-    // The video window belongs to the child (M1: d3d11videosink owns it), so we can only
-    // reach it through the window list. Null while stopped or before the first frame.
-    HWND findVideoWindow() const;
-    void setStalled(bool stalled);   // single entry point for both signals
-    void applyMirrorVisibility();
     void resizeToContent();
     int  chromeHeight() const;
     void controlsFromConfig();
@@ -94,16 +89,8 @@ private:
     UiLog log_;
     Tray  tray_;
 
-    static constexpr UINT_PTR kStallTimer = 1;   // 1 Hz, decides when the client came back
-
     airplay::HostState state_ = airplay::HostState::Stopped;
-    // A locked iPhone stops requesting feedback; the session and the window stay up, so the
-    // last frame freezes on screen. We hide the window until the reports stop arriving.
-    bool  mirrorStalled_  = false;
-    int   zeroFpsReports_ = 0;   // consecutive 0-fps reports; 2 in a row means "asleep"
     int   currentFps_     = 0;   // last non-zero submitSurfaceFPS, shown in the status line
-    DWORD lastFpsTick_    = 0;   // safety net: reports stopping must not leave the video hidden
-    HWND  videoWindow_    = nullptr;   // the window we hid, kept so it can be shown again
     std::wstring clientName_, clientModel_, lastError_, ipv4_;
     std::wstring resolutionText_;   // "1920x1080", only ever filled when debug=true
     bool  exiting_        = false;

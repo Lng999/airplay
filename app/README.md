@@ -100,28 +100,24 @@ Locking the iPhone does **not** end an AirPlay session. It keeps requesting feed
 keeps sending audio; what stops is the video, so the last frame would hang on screen with
 disembodied sound behind it.
 
-There are two signals, fast and slow.
+**The GUI does nothing about it.** The status stays `Bağlandı`, the dot stays green, the
+video window stays where it is, the audio session is never touched. Waking the phone simply
+resumes the picture. The receiver only ever changes what it shows because the user pressed
+Start or Durdur.
 
-**Fast (`patches/0004`).** `video_process()` runs per frame, so the receiver stamps the time
-there and a 200 ms timer prints `mirror idle` after 400 ms without a frame and `mirror
-active` when they return. This is what the user sees react — roughly half a second.
+An earlier version hid the video window and muted the child while the phone slept, driven by
+two signals: `patches/0004` (`mirror idle` / `mirror active`, within ~400 ms of the frames
+stopping) and the client's own once-a-second `-FPSdata` report. It was removed in favour of
+plain mirroring — the window disappearing and coming back on its own was more surprising
+than the frozen frame it replaced.
 
-**Slow (the client's own `-FPSdata` report).** `submitSurfaceFPS` falls to 0 while the screen
-is off and rises on wake (measured live: 59, 24, 0, 0, 0, 52, 59, 60), but only once a
-second, so two of them meant a 2-3 second delay. It is kept as the frame-rate readout on the
-status line and as a backstop if the receiver is ever built without patch 0004. `-FPSdata` is
-passed unconditionally and its XML — 30 lines a second — is dropped in the host before it
-can reach the log; only the parsed rate survives.
+Both signals are still parsed. `MirrorActivity` now has no consumer; `-FPSdata` remains for
+the frame-rate readout on the status line — its XML, 30 lines a second, is dropped in the
+host before it can reach the log, and only the last non-zero rate survives (it reads 0 while
+the screen is off, and that reading is ignored rather than shown).
 
-Either signal means asleep:
-status `Duraklatıldı`, amber dot, the child's **video window hidden** and its **audio session
-muted** (`audio_mute.cpp`, matched on process id — the GStreamer pipeline is never touched).
-The first non-zero report undoes both, with `SW_SHOWNA` so the returning picture does not
-steal focus. Nothing is required from the user in either direction. A 10 s watchdog unhides
-the window if the reports stop altogether. `[app] hide_when_stalled=0` turns it all off.
-
-The feedback-timeout line (`uxplay.cpp:549`) is recognised but no longer treated as an
-error — it means the network is late, not that anything failed.
+The feedback-timeout line (`uxplay.cpp:549`) is recognised but not treated as an error — it
+means the network is late, not that anything failed.
 
 This is also why **Bağlantı zaman aşımı defaults to off**: with UxPlay's own 15 s limit the
 session was declared lost while the phone was just asleep.

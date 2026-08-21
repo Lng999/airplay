@@ -40,8 +40,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int) {
         return 0;
     }
 
-    // The audio-session API (audio_mute.cpp) is COM; apartment-threaded matches the UI
-    // thread the event callback is marshalled onto.
+    // Shell APIs the UI reaches for (SHGetKnownFolderPath, the tray icon) are COM;
+    // apartment-threaded is what a UI thread wants.
     const HRESULT comInit = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 
     INITCOMMONCONTROLSEX icc{};
