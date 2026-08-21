@@ -354,6 +354,25 @@ void testError() {
     if (e) CHECK_STR(e->message, "stopping");
 }
 
+// uxplay.cpp:1207 - argv encoding rejection, written with fprintf(stderr) so there is no
+// "*** " prefix. It is followed by exit(0), which on its own looks like a clean shutdown.
+void testBareErrorLine() {
+    beginTest("bare Error: line");
+    const std::string raw =
+        "Error: detected a non-ascii or non-UTF-8 string \"orpc?cpcu?\""
+        "while parsing input arguments";
+    ParsedLine p = parseUxplayLineDetailed(raw);
+    CHECK_TAG(p, LineTag::Error);
+    const HostEvent* e = find(p.events, HostEventKind::Error);
+    CHECK(e != nullptr);
+    if (e) CHECK_STR(e->message, raw);
+
+    // uxplay.cpp:1241 - the -n specific rejection
+    ParsedLine q = parseUxplayLineDetailed("invalid (non-UTF-8/ascii) server name in \"-n xx\"");
+    CHECK_TAG(q, LineTag::Error);
+    CHECK(find(q.events, HostEventKind::Error) != nullptr);
+}
+
 // unknown line -> LogLine only
 void testUnknown() {
     beginTest("unknown line");
@@ -462,6 +481,7 @@ int main() {
     testResolution();
     testWarning();
     testError();
+    testBareErrorLine();
     testUnknown();
     testEolStripping();
     testBuildArgsDefault();

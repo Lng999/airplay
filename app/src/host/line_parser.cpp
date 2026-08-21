@@ -133,6 +133,17 @@ ParsedLine parseUxplayLineDetailed(const std::string& rawIn) {
         out.events.push_back(makeEvent(HostEventKind::Error, t.substr(11)));
         return out;
     }
+    // --- bare "Error: ..." / "invalid ... server name": argument parsing writes straight to
+    //     stderr instead of going through log(), so these carry no "*** " prefix
+    //     (uxplay.cpp:1207 non-UTF-8 argv, :1241 bad -n name). They are fatal - the process
+    //     exit()s immediately after - and are the only explanation the user ever gets, so
+    //     they must not be swallowed as an unknown line.
+    if (startsWith(t, "Error: ") || startsWith(t, "invalid (non-UTF-8/ascii) server name")) {
+        out.tag = LineTag::Error;
+        out.events.push_back(makeEvent(HostEventKind::Error, t));
+        return out;
+    }
+
     if (startsWith(t, "*** WARNING: ")) {                           // uxplay.cpp:242
         out.tag = LineTag::Warning;
         out.events.push_back(makeEvent(HostEventKind::Warning, t.substr(13)));
