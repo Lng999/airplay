@@ -62,7 +62,7 @@ struct AppConfig {
     bool         trayHintShown     = false;   // the "still running in the tray" balloon
     bool         hideWhenStalled   = true;    // hide the frozen picture while the phone sleeps
                                               // (no UI: an escape hatch, not a preference)
-    std::wstring msysRoot          = L"C:\\msys64";
+    std::wstring msysRoot;                     // empty => no runtime tree found
     std::wstring uxplayPath;                   // empty => not found, UI shows an error
 
     // [window]
@@ -72,6 +72,11 @@ struct AppConfig {
 // Default uxplay.exe location: next to the GUI exe, else <exe dir>\..\build\uxplay.exe,
 // else empty.
 std::wstring defaultUxplayPath();
+
+// Default runtime root: the portable tree at <exe dir>\ucrt64\bin if there is one, else
+// C:\msys64 if MSYS2 is installed, else empty. The GUI never hardcodes C:\msys64 any more -
+// a copied-to-another-machine install has no MSYS2 and carries its own ucrt64\ tree instead.
+std::wstring defaultMsysRoot();
 
 class ConfigStore {
 public:

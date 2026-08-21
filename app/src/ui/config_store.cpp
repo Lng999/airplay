@@ -93,6 +93,12 @@ bool fileExists(const std::wstring& path) {
     return a != INVALID_FILE_ATTRIBUTES && !(a & FILE_ATTRIBUTE_DIRECTORY);
 }
 
+bool dirExists(const std::wstring& path) {
+    if (path.empty()) return false;
+    DWORD a = GetFileAttributesW(path.c_str());
+    return a != INVALID_FILE_ATTRIBUTES && (a & FILE_ATTRIBUTE_DIRECTORY) != 0;
+}
+
 bool ensureDir(const std::wstring& dir) {
     if (dir.empty()) return false;
     DWORD a = GetFileAttributesW(dir.c_str());
@@ -149,6 +155,18 @@ std::wstring defaultUxplayPath() {
     return std::wstring();
 }
 
+std::wstring defaultMsysRoot() {
+    // Portable layout: the runtime tree ships next to the GUI as <exe dir>\ucrt64\bin, so the
+    // machine we were copied to needs no MSYS2 install of its own.
+    const std::wstring dir = exeDir();
+    if (!dir.empty() && dirExists(joinPath(dir, L"ucrt64\\bin"))) return dir;
+
+    // Development layout: the MSYS2 install the build came out of.
+    if (dirExists(L"C:\\msys64\\ucrt64\\bin")) return L"C:\\msys64";
+
+    return std::wstring();
+}
+
 // ---------------------------------------------------------------------------
 
 ConfigStore::ConfigStore() {
@@ -183,8 +201,13 @@ void ConfigStore::load(AppConfig& cfg) const {
     cfg.showDetails       = readBool(f, L"app", L"show_details",       cfg.showDetails);
     cfg.trayHintShown     = readBool(f, L"app", L"tray_hint_shown",    cfg.trayHintShown);
     cfg.hideWhenStalled   = readBool(f, L"app", L"hide_when_stalled",  cfg.hideWhenStalled);
-    cfg.msysRoot          = readStr (f, L"app", L"msys_root",          cfg.msysRoot);
+    cfg.msysRoot          = readStr (f, L"app", L"msys_root",          L"");
     cfg.uxplayPath        = readStr (f, L"app", L"uxplay_path",        L"");
+
+    // A config.ini carried over from another machine points at paths that do not exist here.
+    // Both keys are therefore hints, not commitments: an unusable one falls back to detection.
+    if (cfg.msysRoot.empty() || !dirExists(joinPath(cfg.msysRoot, L"ucrt64\\bin")))
+        cfg.msysRoot = defaultMsysRoot();
 
     if (cfg.uxplayPath.empty() || !fileExists(cfg.uxplayPath))
         cfg.uxplayPath = defaultUxplayPath();
