@@ -64,13 +64,25 @@ build-app/airplay-gui.exe -autostart     # same as [app] autostart_receiver=1
 development layout `build-app/` + `build/`). If none exists the status line shows an error
 and **Start** refuses to run.
 
-The window: status line, receiver name/port, video and audio sink, the Fullscreen / H.265 /
-Debug log switches, Always on top, Start receiver on launch, the Start / Stop / Copy cmdline
-buttons and the last 500 log lines. Receiver settings are greyed out while the child runs —
-UxPlay only reads its argv at startup, so a change needs a restart.
+The window is Turkish and collapsed by default (`docs/PHASE2-UX-SPEC.md`): a coloured status
+dot, the state, one line saying what to do next, the receiver name and a single Start/Stop
+button. Two section headers open the rest:
 
-- **Close button hides to the notification area.** The tray menu (right click) has
-  Show / Start / Stop / Exit; only **Exit** really quits, and it stops the child first.
+- **Gelişmiş** — port, video/audio sink, Fullscreen, H.265, Ayrıntılı günlük (debug), Always
+  on top, Start receiver on launch and *Komutu kopyala* (the exact argv, for reproducing a
+  problem in a plain terminal).
+- **Ayrıntılar** — the last 500 log lines.
+
+Opening or closing a section re-fits the window height and is remembered in `config.ini`.
+Receiver settings are greyed out while the child runs — UxPlay only reads its argv at
+startup, so a change needs a restart.
+
+The status dot: grey idle, amber starting/stopping, blue advertising, green mirroring,
+red error.
+
+- **Close button hides to the notification area.** A balloon says so the first time
+  (`[app] tray_hint_shown`). The tray menu (right click) has Göster / Başlat / Durdur /
+  Çıkış; only **Çıkış** really quits, and it stops the child first.
 - **Second launch** does not start a second GUI: it raises the first window
   (named mutex + `FindWindowW("AirplayGuiMainWindow")`).
 - **Copy cmdline** puts the exact argv the host would use on the clipboard — handy for
@@ -103,6 +115,9 @@ reset=15            ; -reset N, 0 disables the missed-feedback timeout
 always_on_top=0
 start_minimized=0
 autostart_receiver=0
+show_advanced=0     ; collapsible sections, written the moment they are toggled
+show_details=0
+tray_hint_shown=0   ; the one-shot "still running in the tray" balloon
 msys_root=C:\msys64
 uxplay_path=
 
@@ -118,7 +133,7 @@ x=…  y=…  w=…  h=…
   (Alt+Enter in the video window).
 - **No FPS and no bitrate.** Those numbers exist only inside the renderer, which we do not
   link against in M1.
-- **Resolution is shown only when "Debug log" is on.** UxPlay logs the mirrored size at
+- **Resolution is shown only when "Ayrıntılı günlük" (debug) is on.** UxPlay logs the mirrored size at
   DEBUG level inside the library (`lib/raop_rtp_mirror.c:608-609`); without `-d` the line is
   never printed. Turning it on also re-enables stdout buffering, so log lines arrive in
   bursts.
