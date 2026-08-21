@@ -33,6 +33,9 @@ enum class LineTag {
     RegisteredClient, // uxplay.cpp:2570  "registered new client: %s DeviceID = %s PK = "
     LostConnection,   // uxplay.cpp:2264 ("*** ERROR ...") and :538 ("***ERROR ...", no space)
     FeedbackTimeout,  // uxplay.cpp:539   "   Interval since last client feedback request exceeds ..."
+    PlistKey,         // "<key>NAME</key>"     from a -FPSdata report; detail = NAME
+    PlistInteger,     // "<integer>N</integer>" from a -FPSdata report; detail = N
+    PlistNoise,       // any other line of the report envelope (<plist>, <dict>, <real>, ...)
     FeedbackLate,     // uxplay.cpp:549   "%3u seconds since last client feedback request ..."
                       //   Printed once a second while the client stops asking for feedback,
                       //   which is what an iPhone does when its screen is switched off. The

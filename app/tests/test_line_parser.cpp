@@ -395,6 +395,27 @@ void testFeedbackLate() {
     if (e2) CHECK_INT(e2->srcWidth, 17);
 }
 
+// -FPSdata reports (lib/raop_rtp_mirror.c:807-811). submitSurfaceFPS == 0 is the only
+// reliable "the phone is not producing frames" signal - the client keeps sending feedback
+// while its screen is off, so the feedback timer never notices.
+void testPlistReport() {
+    beginTest("FPSdata plist lines");
+    ParsedLine k = parseUxplayLineDetailed("	<key>submitSurfaceFPS</key>");
+    CHECK_TAG(k, LineTag::PlistKey);
+    CHECK_STR(k.detail, "submitSurfaceFPS");
+
+    ParsedLine v = parseUxplayLineDetailed("	<integer>0</integer>");
+    CHECK_TAG(v, LineTag::PlistInteger);
+    CHECK_STR(v.detail, "0");
+
+    ParsedLine v2 = parseUxplayLineDetailed("	<integer>44</integer>");
+    CHECK_STR(v2.detail, "44");
+
+    for (const char* noise : {"<?xml version=\"1.0\" encoding=\"UTF-8\"?>", "<plist version=\"1.0\">",
+                              "<dict>", "</dict>", "</plist>", "	<real>1.5e-05</real>"})
+        CHECK_TAG(parseUxplayLineDetailed(noise), LineTag::PlistNoise);
+}
+
 // unknown line -> LogLine only
 void testUnknown() {
     beginTest("unknown line");
@@ -524,6 +545,7 @@ int main() {
     testError();
     testBareErrorLine();
     testFeedbackLate();
+    testPlistReport();
     testUnknown();
     testEolStripping();
     testBuildArgsDefault();

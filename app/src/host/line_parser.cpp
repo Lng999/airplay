@@ -14,6 +14,11 @@ bool startsWith(const std::string& s, const char* prefix) {
     return s.size() >= n && s.compare(0, n, prefix) == 0;
 }
 
+bool endsWith(const std::string& s, const char* suffix) {
+    const size_t n = std::strlen(suffix);
+    return s.size() >= n && s.compare(s.size() - n, n, suffix) == 0;
+}
+
 std::string trim(const std::string& s) {
     size_t b = 0, e = s.size();
     while (b < e && (s[b] == ' ' || s[b] == '\t')) ++b;
@@ -126,6 +131,27 @@ ParsedLine parseUxplayLineDetailed(const std::string& rawIn) {
         startsWith(t, "***")) {
         out.tag = LineTag::LostConnection;
         out.events.push_back(makeEvent(HostEventKind::Error, raw));
+        return out;
+    }
+
+    // --- -FPSdata report (lib/raop_rtp_mirror.c:807-811 dumps the client's plist as XML).
+    //     The client keeps requesting feedback while its screen is off, so the only honest
+    //     "no picture is arriving" signal is submitSurfaceFPS dropping to 0 in these reports.
+    //     Split into key/value lines here; UxplayHost pairs them up.
+    if (startsWith(t, "<key>") && endsWith(t, "</key>")) {
+        out.tag = LineTag::PlistKey;
+        out.detail = t.substr(5, t.size() - 11);
+        return out;
+    }
+    if (startsWith(t, "<integer>") && endsWith(t, "</integer>")) {
+        out.tag = LineTag::PlistInteger;
+        out.detail = t.substr(9, t.size() - 19);
+        return out;
+    }
+    if (startsWith(t, "<?xml") || startsWith(t, "<!DOCTYPE plist") || startsWith(t, "<plist") ||
+        startsWith(t, "</plist") || t == "<dict>" || t == "</dict>" ||
+        (startsWith(t, "<real>") && endsWith(t, "</real>"))) {
+        out.tag = LineTag::PlistNoise;
         return out;
     }
 
