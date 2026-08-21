@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <vector>
 
+#include "audio_mute.h"
 #include "single_instance.h"
 #include "strings.h"
 
@@ -466,6 +467,10 @@ HWND MainWindow::findVideoWindow() const {
 
 void MainWindow::applyMirrorVisibility() {
     if (!cfg_.hideWhenStalled) return;
+    // Audio keeps flowing while the phone sleeps, so hiding the picture alone would leave a
+    // disembodied sound. Muting the child's session is independent of the video window and
+    // is a no-op if it has no session yet.
+    setProcessMuted(host_.pid(), mirrorStalled_);
     if (mirrorStalled_) {
         HWND v = findVideoWindow();
         if (!v) return;

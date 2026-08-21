@@ -6,6 +6,7 @@
 #include "config_store.h"   // must come first: <winsock2.h> before <windows.h>
 
 #include <commctrl.h>
+#include <objbase.h>   // WIN32_LEAN_AND_MEAN leaves COM out of windows.h
 #include <shellapi.h>
 
 #include "main_window.h"
@@ -39,6 +40,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int) {
         return 0;
     }
 
+    // The audio-session API (audio_mute.cpp) is COM; apartment-threaded matches the UI
+    // thread the event callback is marshalled onto.
+    const HRESULT comInit = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+
     INITCOMMONCONTROLSEX icc{};
     icc.dwSize = sizeof(icc);
     icc.dwICC  = ICC_STANDARD_CLASSES | ICC_WIN95_CLASSES;
@@ -65,5 +70,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int) {
             DispatchMessageW(&msg);
         }
     }
+    if (SUCCEEDED(comInit)) CoUninitialize();
     return static_cast<int>(msg.wParam);
 }
