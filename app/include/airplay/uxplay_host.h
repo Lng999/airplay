@@ -27,6 +27,11 @@ enum class HostEventKind {
     Ports,           // ports parsed (uxplay.cpp:3205): udp[3], tcp[3]
     Resolution,      // only with debug=true: width/height parsed (lib/raop_rtp_mirror.c:608-609)
     Pin,             // pairing PIN block seen (uxplay.cpp:2196-2205); message = digits if parsed
+    // The client has not asked for feedback for a few seconds (uxplay.cpp:549). An iPhone
+    // does this when its screen is locked: the RTSP session and the video window stay alive
+    // but no new frames arrive, so the last one freezes on screen. message = the raw line,
+    // srcWidth carries the seconds count.
+    MirrorStalled,
     Warning,         // "*** WARNING: ..." line
     Error            // "*** ERROR: ..." line (does not necessarily change state)
 };

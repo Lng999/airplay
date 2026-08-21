@@ -741,6 +741,12 @@ void MainWindow::onHostEvent(const airplay::HostEvent& ev) {
                         str::kAppName, MB_ICONINFORMATION | MB_OK);
             break;
 
+        case K::MirrorStalled:
+            // The client went quiet (locked iPhone). Handled in the next commit; for now it
+            // only reaches the log, and deliberately not as an error.
+            logUi(L"mirror stalled: " + widen(ev.message));
+            break;
+
         case K::Warning:
             logUi(L"WARNING: " + widen(ev.message));
             break;

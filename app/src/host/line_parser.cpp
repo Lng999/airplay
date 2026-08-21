@@ -3,6 +3,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 namespace airplay {
@@ -125,6 +126,20 @@ ParsedLine parseUxplayLineDetailed(const std::string& rawIn) {
         startsWith(t, "***")) {
         out.tag = LineTag::LostConnection;
         out.events.push_back(makeEvent(HostEventKind::Error, raw));
+        return out;
+    }
+
+    // --- client stopped asking for feedback (uxplay.cpp:549). Emitted through LOGE, so it
+    //     wears the "*** ERROR: " prefix, but it is not a failure: an iPhone whose screen is
+    //     off produces it once a second and recovers on its own. Must be checked before the
+    //     generic error prefix or it would be reported as an error to the user.
+    if (t.find("seconds since last client feedback request") != std::string::npos) {
+        out.tag = LineTag::FeedbackLate;
+        HostEvent ev = makeEvent(HostEventKind::MirrorStalled, t);
+        // "*** ERROR:   3 seconds since ..." -> pull the count out for the UI.
+        size_t digit = t.find_first_of("0123456789");
+        if (digit != std::string::npos) ev.srcWidth = std::atoi(t.c_str() + digit);
+        out.events.push_back(ev);
         return out;
     }
 

@@ -33,6 +33,10 @@ enum class LineTag {
     RegisteredClient, // uxplay.cpp:2570  "registered new client: %s DeviceID = %s PK = "
     LostConnection,   // uxplay.cpp:2264 ("*** ERROR ...") and :538 ("***ERROR ...", no space)
     FeedbackTimeout,  // uxplay.cpp:539   "   Interval since last client feedback request exceeds ..."
+    FeedbackLate,     // uxplay.cpp:549   "%3u seconds since last client feedback request ..."
+                      //   Printed once a second while the client stops asking for feedback,
+                      //   which is what an iPhone does when its screen is switched off. The
+                      //   session stays up; only this line marks the gap.
     Stopping,         // uxplay.cpp:3309  "Stopping RAOP Server..."
     VideoDisabled,    // uxplay.cpp:3080  "video_disabled"
     AudioDisabled,    // uxplay.cpp:3184  "audio_disabled"

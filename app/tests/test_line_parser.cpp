@@ -373,6 +373,28 @@ void testBareErrorLine() {
     CHECK(find(q.events, HostEventKind::Error) != nullptr);
 }
 
+// uxplay.cpp:549 - the client stopped asking for feedback. An iPhone with its screen off
+// prints this once a second; it is NOT a failure and must not surface as one.
+void testFeedbackLate() {
+    beginTest("feedback late (screen off)");
+    ParsedLine p = parseUxplayLineDetailed(
+        "*** ERROR:   3 seconds since last client feedback request "
+        "(expected every two seconds); client may be offline");
+    CHECK_TAG(p, LineTag::FeedbackLate);
+    const HostEvent* e = find(p.events, HostEventKind::MirrorStalled);
+    CHECK(e != nullptr);
+    if (e) CHECK_INT(e->srcWidth, 3);
+    // it must not also be reported as a plain error
+    CHECK(find(p.events, HostEventKind::Error) == nullptr);
+
+    ParsedLine q = parseUxplayLineDetailed(
+        "*** ERROR:  17 seconds since last client feedback request "
+        "(expected every two seconds); client may be offline");
+    const HostEvent* e2 = find(q.events, HostEventKind::MirrorStalled);
+    CHECK(e2 != nullptr);
+    if (e2) CHECK_INT(e2->srcWidth, 17);
+}
+
 // unknown line -> LogLine only
 void testUnknown() {
     beginTest("unknown line");
@@ -501,6 +523,7 @@ int main() {
     testWarning();
     testError();
     testBareErrorLine();
+    testFeedbackLate();
     testUnknown();
     testEolStripping();
     testBuildArgsDefault();
