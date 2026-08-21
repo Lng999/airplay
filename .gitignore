@@ -9,3 +9,5 @@ CMakeFiles/
 .venv/
 build-host/
 build-app/
+dist/
+*.rar
