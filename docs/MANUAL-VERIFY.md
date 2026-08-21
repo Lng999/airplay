@@ -10,9 +10,10 @@ Her satır: `[ ]` bekliyor · `[x] YYYY-MM-DD` doğrulandı · `[!]` başarısı
 - [x] 2026-08-21 Ses geldi (kullanıcı raporu)
 - [ ] Döndürme (portrait↔landscape) düzgün
 - [ ] iPhone'dan "Yansıtmayı Durdur" → uxplay temiz şekilde beklemeye dönüyor, tekrar bağlanabiliyor
-- [ ] **Telefon uykusu:** yansıtma sürerken yan tuşla ekranı kapat → PC'deki görüntü ~3 sn
-      içinde kayboluyor, durum "Duraklatıldı" (turuncu nokta); telefonu aç → görüntü
+- [ ] **Telefon uykusu:** yansıtma sürerken yan tuşla ekranı kapat → PC'deki görüntü **ve ses**
+      ~2 sn içinde kesiliyor, durum "Duraklatıldı" (turuncu nokta); telefonu aç → ikisi de
       kendiliğinden geri geliyor ve odak çalınmıyor
+- [ ] Bağlıyken durum satırında gerçek kare hızı görünüyor (ör. "· 44 fps") ve makul
 - [ ] Telefonu 1 dakikadan uzun kapalı tut → açınca yine geri geliyor (zaman aşımı Kapalı)
 - [ ] Gecikme kabul edilebilir (ms tahmini not edilsin)
 - [ ] **Akıcılık:** 30 FPS ile 60 FPS arasında gözle görülür fark var mı? (Gelişmiş →
@@ -20,7 +21,7 @@ Her satır: `[ ]` bekliyor · `[x] YYYY-MM-DD` doğrulandı · `[!]` başarısı
       gidiyor, varsayılanı 30 (`lib/raop.c:623`)
 - [ ] **Görüntü çözücü:** Otomatik (d3d12h264dec) ile Direct3D 11 arasında fark var mı?
       Sink d3d11videosink olduğu için Otomatik'te her kare API sınırını geçiyor
-- [ ] İstemci FPS raporu açıkken günlükteki XML gerçekte kaç fps geldiğini gösteriyor mu
+- [ ] Ayrıntılar günlüğünde ham FPSdata XML'i **görünmüyor** (sadece ayrıştırılmış hız)
 - Notlar: dahili mDNS (lib/mdnsd + patches/0001), video `d3d11videosink`, ses `wasapi2sink`, build 2026-08-21, iPhone 13; PC Ethernet 192.168.1.107 ↔ iPhone Wi-Fi aynı modem
 
 ## Phase 2 — Kendi GUI'miz

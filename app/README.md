@@ -83,12 +83,25 @@ red error.
 
 ### Sleeping phone
 
-Locking the iPhone does **not** end an AirPlay session: it only stops the client from
-requesting feedback, so the last frame would hang on screen forever. The GUI treats that as
-a stall — status `Duraklatıldı`, amber dot — and **hides the child's video window** until the
-lines stop arriving (2.5 s of silence at 1 Hz, `uxplay.cpp:535-556`), then shows it again
-with `SW_SHOWNA` so the returning picture does not steal focus. Nothing is required from the
-user in either direction. `[app] hide_when_stalled=0` turns it off.
+Locking the iPhone does **not** end an AirPlay session. It keeps requesting feedback and
+keeps sending audio; what stops is the video, so the last frame would hang on screen with
+disembodied sound behind it.
+
+The signal is the client's own `-FPSdata` report: `submitSurfaceFPS` falls to 0 while the
+screen is off and rises again on wake (measured in a live session: 59, 24, 0, 0, 0, 52, 59,
+60). `-FPSdata` is therefore passed unconditionally, and its XML — 30 lines a second — is
+dropped in the host before it can reach the log; only the parsed rate survives, and it is
+shown on the status line.
+
+Two zero reports in a row (one dropped report must not blink the window away) mean asleep:
+status `Duraklatıldı`, amber dot, the child's **video window hidden** and its **audio session
+muted** (`audio_mute.cpp`, matched on process id — the GStreamer pipeline is never touched).
+The first non-zero report undoes both, with `SW_SHOWNA` so the returning picture does not
+steal focus. Nothing is required from the user in either direction. A 10 s watchdog unhides
+the window if the reports stop altogether. `[app] hide_when_stalled=0` turns it all off.
+
+The feedback-timeout line (`uxplay.cpp:549`) is recognised but no longer treated as an
+error — it means the network is late, not that anything failed.
 
 This is also why **Bağlantı zaman aşımı defaults to off**: with UxPlay's own 15 s limit the
 session was declared lost while the phone was just asleep.
@@ -130,7 +143,6 @@ max_fps=60          ; -fps n; the maxFPS plist item the client obeys. UxPlay's o
 video_decoder=      ; -vd; empty = "decodebin", which picks by GStreamer rank. On this machine
                     ; that is d3d12h264dec (258) while the sink is d3d11videosink, so frames
                     ; cross the D3D12/D3D11 boundary; d3d11h264dec keeps one API.
-fps_data=0          ; -FPSdata; the client's streaming performance reports (XML) into the log
 nohold=1
 
 [app]
