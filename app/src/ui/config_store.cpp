@@ -155,11 +155,16 @@ std::wstring defaultUxplayPath() {
     return std::wstring();
 }
 
+bool isPortableInstall() {
+    const std::wstring dir = exeDir();
+    return !dir.empty() && dirExists(joinPath(dir, L"ucrt64\\bin"));
+}
+
 std::wstring defaultMsysRoot() {
     // Portable layout: the runtime tree ships next to the GUI as <exe dir>\ucrt64\bin, so the
     // machine we were copied to needs no MSYS2 install of its own.
     const std::wstring dir = exeDir();
-    if (!dir.empty() && dirExists(joinPath(dir, L"ucrt64\\bin"))) return dir;
+    if (isPortableInstall()) return dir;
 
     // Development layout: the MSYS2 install the build came out of.
     if (dirExists(L"C:\\msys64\\ucrt64\\bin")) return L"C:\\msys64";
@@ -204,13 +209,22 @@ void ConfigStore::load(AppConfig& cfg) const {
     cfg.msysRoot          = readStr (f, L"app", L"msys_root",          L"");
     cfg.uxplayPath        = readStr (f, L"app", L"uxplay_path",        L"");
 
-    // A config.ini carried over from another machine points at paths that do not exist here.
-    // Both keys are therefore hints, not commitments: an unusable one falls back to detection.
-    if (cfg.msysRoot.empty() || !dirExists(joinPath(cfg.msysRoot, L"ucrt64\\bin")))
-        cfg.msysRoot = defaultMsysRoot();
+    // Both path keys are hints, not commitments. Two things override them:
+    //
+    //  - a portable install answers the question itself. It ships the receiver and the runtime
+    //    in one folder, and %APPDATA% is shared with every other copy on the machine - honouring
+    //    a path from there would let one copy run another copy's binaries.
+    //  - a config.ini carried over from another machine names paths that do not exist here.
+    //
+    // Whichever applies, we re-detect and remember that the file no longer decides (see save()).
+    const bool portable = isPortableInstall();
 
-    if (cfg.uxplayPath.empty() || !fileExists(cfg.uxplayPath))
-        cfg.uxplayPath = defaultUxplayPath();
+    cfg.msysRootFromFile = !portable && !cfg.msysRoot.empty() &&
+                           dirExists(joinPath(cfg.msysRoot, L"ucrt64\\bin"));
+    if (!cfg.msysRootFromFile) cfg.msysRoot = defaultMsysRoot();
+
+    cfg.uxplayPathFromFile = !portable && !cfg.uxplayPath.empty() && fileExists(cfg.uxplayPath);
+    if (!cfg.uxplayPathFromFile) cfg.uxplayPath = defaultUxplayPath();
 
     cfg.x = readInt(f, L"window", L"x", cfg.x);
     cfg.y = readInt(f, L"window", L"y", cfg.y);
@@ -246,8 +260,11 @@ void ConfigStore::save(const AppConfig& cfg) const {
     writeInt(f, L"app", L"show_details",       cfg.showDetails ? 1 : 0);
     writeInt(f, L"app", L"tray_hint_shown",    cfg.trayHintShown ? 1 : 0);
     writeInt(f, L"app", L"hide_when_stalled",  cfg.hideWhenStalled ? 1 : 0);
-    writeStr(f, L"app", L"msys_root",          cfg.msysRoot);
-    writeStr(f, L"app", L"uxplay_path",        cfg.uxplayPath);
+    // Only a path a human put there is written back. Persisting a detected one would freeze
+    // this run's layout into a file every copy on the machine reads - and the detection is
+    // cheap and correct, so there is nothing to cache.
+    writeStr(f, L"app", L"msys_root",   cfg.msysRootFromFile   ? cfg.msysRoot   : std::wstring());
+    writeStr(f, L"app", L"uxplay_path", cfg.uxplayPathFromFile ? cfg.uxplayPath : std::wstring());
 
     writeInt(f, L"window", L"x", cfg.x);
     writeInt(f, L"window", L"y", cfg.y);

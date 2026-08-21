@@ -64,6 +64,10 @@ struct AppConfig {
                                               // (no UI: an escape hatch, not a preference)
     std::wstring msysRoot;                     // empty => no runtime tree found
     std::wstring uxplayPath;                   // empty => not found, UI shows an error
+    // Whether the two paths above came from config.ini and still resolve here. False means we
+    // detected them, and save() leaves the keys empty so the next run detects them again.
+    bool         msysRootFromFile   = false;
+    bool         uxplayPathFromFile = false;
 
     // [window]
     int x = CW_USEDEFAULT, y = CW_USEDEFAULT, w = 0, h = 0;
@@ -77,6 +81,11 @@ std::wstring defaultUxplayPath();
 // C:\msys64 if MSYS2 is installed, else empty. The GUI never hardcodes C:\msys64 any more -
 // a copied-to-another-machine install has no MSYS2 and carries its own ucrt64\ tree instead.
 std::wstring defaultMsysRoot();
+
+// True when the GUI is running out of a packaged folder that carries its own runtime
+// (<exe dir>\ucrt64\bin). Such an install ignores the path keys in config.ini: %APPDATA% is
+// shared with every other copy on the machine, and the folder already knows what it ships.
+bool isPortableInstall();
 
 class ConfigStore {
 public:
