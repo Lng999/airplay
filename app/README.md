@@ -64,6 +64,12 @@ build-app/airplay-gui.exe -autostart     # same as [app] autostart_receiver=1
 development layout `build-app/` + `build/`). If none exists the status line shows an error
 and **Start** refuses to run.
 
+A **portable or installed copy skips the config entirely** for that lookup and for
+`msys_root`: when `<exe dir>\ucrt64\bin` exists the folder carries its own receiver and its
+own runtime, and `%APPDATA%\config.ini` is shared with every other copy on the machine — so
+honouring a path from there would let one copy run another copy's binaries. Detected paths
+are not written back either; only a path a human typed into the file survives a save.
+
 The window is Turkish and collapsed by default (`docs/PHASE2-UX-SPEC.md`): a coloured status
 dot, the state, one line saying what to do next, the receiver name and a single Start/Stop
 button. Two section headers open the rest:
@@ -130,6 +136,23 @@ session was declared lost while the phone was just asleep.
 - **Copy cmdline** puts the exact argv the host would use on the clipboard — handy for
   reproducing a problem in a plain terminal.
 
+### Updates
+
+`scripts/publish-release.ps1` puts one `.exe` on a GitHub release tagged `v<version>`. The app
+asks `/releases/latest` for `tag_name`, compares it with the version compiled into it
+(`src/ui/version.h.in`, sourced from `project(... VERSION)`) and, when the release is newer,
+offers it: tray balloon, then a prompt carrying the first lines of the release notes.
+
+Saying yes downloads the installer to `%TEMP%\airplay-update` (onto a `.part`, renamed only
+when complete), stops the child — the installer replaces `uxplay.exe` too — and runs setup
+`/SILENT`. `installer/airplay.iss` starts the app back up afterwards, which is why its `[Run]`
+entry deliberately has no `skipifsilent`.
+
+The check runs on a worker thread and is fired from a one-shot 4 s timer rather than
+`WM_CREATE`: its answer is a message box, and a message box must not arrive before the window
+it belongs to. `HTTP 404` in the log means the release is not public — the transport is
+WinHTTP with no credentials, by design.
+
 ## Where things live
 
 | What | Path |
@@ -169,9 +192,10 @@ autostart_receiver=0
 show_advanced=0     ; collapsible sections, written the moment they are toggled
 show_details=0
 tray_hint_shown=0   ; the one-shot "still running in the tray" balloon
-hide_when_stalled=1 ; hide the frozen video window while the phone's screen is off
-msys_root=C:\msys64
-uxplay_path=
+auto_update=1       ; check GitHub for a newer release ~4 s after the window is up.
+                    ; 0 only disables the startup check; the tray menu item still works.
+msys_root=          ; empty = detect. Written back only when a human put a path here:
+uxplay_path=        ; a portable install answers both from its own folder (see below).
 
 [window]
 x=…  y=…  w=…  h=…

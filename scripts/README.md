@@ -11,6 +11,8 @@ firewall, launch the receiver. Run them in this order.
 | 4 | `pwsh -File scripts/run-uxplay.ps1` | Launches `uxplay.exe` with PATH, `HOME` and GStreamer env prepared. |
 | 5 | `pwsh -File scripts/smoke-test.ps1` | Device-free checks (GStreamer plugins, mDNS announcement). |
 | 6 | `pwsh -File scripts/make-portable.ps1` | Packs `dist\airplay-portable\` — both exes plus the whole ucrt64 runtime, so the folder runs on a PC with no MSYS2. |
+| 7 | `pwsh -File scripts/make-installer.ps1` | Wraps that folder in `dist\AirPlay-Setup-<version>.exe` (Inno Setup, per-user, ~65 MB). |
+| 8 | `pwsh -File scripts/publish-release.ps1` | Tags `v<version>`, pushes it and publishes the GitHub release the in-app update check reads. |
 
 ## Details
 
@@ -44,6 +46,20 @@ firewall, launch the receiver. Run them in this order.
   (`app/src/ui/config_store.cpp` `defaultMsysRoot()`). What still has to happen there by hand
   is the firewall: answer the first-run prompt for **private** networks, and keep the adapter
   on the Private profile.
+
+- **make-installer.ps1** — `-SkipPortable` reuses `dist\airplay-portable\`, `-Iscc <path>` overrides
+  the Inno Setup compiler (found automatically; `winget install --id JRSoftware.InnoSetup`).
+  Reads the version out of `app/CMakeLists.txt` and refuses to build when the compiled
+  `airplay-gui.exe` reports a different one — that mismatch would ship an installer whose
+  filename lies and whose update check compares against the wrong number.
+- **publish-release.ps1** — `-Draft`, `-SkipBuild`, `-NotesFile <path>` (default
+  `installer/release-notes/v<version>.md`, else generated from the commits since the last tag).
+  Refuses on a dirty tree, an unpushed HEAD, or an existing tag. Warns when the repo is private:
+  release assets there need a token, so every other machine's update check gets HTTP 404.
+
+  What the app reads is `/releases/latest` — `tag_name` for the version and the single `.exe`
+  asset for the download. Drafts and prereleases are skipped by that endpoint, which is what
+  makes `-Draft` a safe way to stage one.
 
 ## Manual verification
 
