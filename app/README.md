@@ -100,13 +100,20 @@ Locking the iPhone does **not** end an AirPlay session. It keeps requesting feed
 keeps sending audio; what stops is the video, so the last frame would hang on screen with
 disembodied sound behind it.
 
-The signal is the client's own `-FPSdata` report: `submitSurfaceFPS` falls to 0 while the
-screen is off and rises again on wake (measured in a live session: 59, 24, 0, 0, 0, 52, 59,
-60). `-FPSdata` is therefore passed unconditionally, and its XML — 30 lines a second — is
-dropped in the host before it can reach the log; only the parsed rate survives, and it is
-shown on the status line.
+There are two signals, fast and slow.
 
-Two zero reports in a row (one dropped report must not blink the window away) mean asleep:
+**Fast (`patches/0004`).** `video_process()` runs per frame, so the receiver stamps the time
+there and a 200 ms timer prints `mirror idle` after 400 ms without a frame and `mirror
+active` when they return. This is what the user sees react — roughly half a second.
+
+**Slow (the client's own `-FPSdata` report).** `submitSurfaceFPS` falls to 0 while the screen
+is off and rises on wake (measured live: 59, 24, 0, 0, 0, 52, 59, 60), but only once a
+second, so two of them meant a 2-3 second delay. It is kept as the frame-rate readout on the
+status line and as a backstop if the receiver is ever built without patch 0004. `-FPSdata` is
+passed unconditionally and its XML — 30 lines a second — is dropped in the host before it
+can reach the log; only the parsed rate survives.
+
+Either signal means asleep:
 status `Duraklatıldı`, amber dot, the child's **video window hidden** and its **audio session
 muted** (`audio_mute.cpp`, matched on process id — the GStreamer pipeline is never touched).
 The first non-zero report undoes both, with `SW_SHOWNA` so the returning picture does not
@@ -135,6 +142,7 @@ session was declared lost while the phone was just asleep.
 | Receiver identity (`.uxplay.pem`) | `%APPDATA%\airplay` (passed to the child as `HOME`) |
 | GUI log | `%LOCALAPPDATA%\airplay\logs\gui.log` (rotated to `gui.log.1` at 5 MB) |
 | GStreamer registry cache | `%LOCALAPPDATA%\airplay\gst-registry.bin` |
+| Application icon | `app/res/app.ico`, drawn by `tools/make-icon.py` |
 
 `config.ini` sections and keys:
 

@@ -11,9 +11,11 @@ Her satır: `[ ]` bekliyor · `[x] YYYY-MM-DD` doğrulandı · `[!]` başarısı
 - [ ] Döndürme (portrait↔landscape) düzgün
 - [ ] iPhone'dan "Yansıtmayı Durdur" → uxplay temiz şekilde beklemeye dönüyor, tekrar bağlanabiliyor
 - [ ] **Telefon uykusu:** yansıtma sürerken yan tuşla ekranı kapat → PC'deki görüntü **ve ses**
-      ~2 sn içinde kesiliyor, durum "Duraklatıldı" (turuncu nokta); telefonu aç → ikisi de
+      **yarım saniye** içinde kesiliyor, durum "Duraklatıldı" (turuncu nokta); telefonu aç → ikisi de
       kendiliğinden geri geliyor ve odak çalınmıyor
 - [ ] Bağlıyken durum satırında gerçek kare hızı görünüyor (ör. "· 44 fps") ve makul
+- [ ] Günlükte "mirror stalled" / "mirror resumed" satırları görünüyor (patches/0004 yolu)
+- [ ] Pencere başlığında, görev çubuğunda ve bildirim alanında yeni ikon görünüyor
 - [ ] Telefonu 1 dakikadan uzun kapalı tut → açınca yine geri geliyor (zaman aşımı Kapalı)
 - [ ] Gecikme kabul edilebilir (ms tahmini not edilsin)
 - [ ] **Akıcılık:** 30 FPS ile 60 FPS arasında gözle görülür fark var mı? (Gelişmiş →

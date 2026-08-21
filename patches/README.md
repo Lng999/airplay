@@ -111,6 +111,27 @@ UxPlay decoded the name correctly.
 An external `uxplay.exe.manifest` next to the binary was tried first and does **not** work —
 `activeCodePage` is only honoured from an embedded manifest.
 
+## `0004-uxplay-report-mirror-idle.patch` — telling the front-end that frames stopped
+
+Not a defect fix: a hook we need and upstream has no reason to want.
+
+A client whose screen is off keeps the RTSP session alive and keeps requesting feedback
+(`uxplay.cpp:535-556` therefore stays quiet); what it stops is sending video. The only
+evidence upstream offers is the client's own `-FPSdata` report, where `submitSurfaceFPS`
+drops to 0 — but those arrive once a second, and waiting for two of them to be sure meant
+the front-end reacted 2-3 seconds late.
+
+`video_process()` (`uxplay.cpp:2338`) runs once per frame. The patch stamps
+`last_video_frame_time` there and adds a 200 ms GLib timer that logs one line each way:
+
+```
+mirror idle: no video frames from client     (400 ms without a frame)
+mirror active: video frames resumed
+```
+
+`app/src/host/line_parser.cpp` turns those into `MirrorActivity` events. The reaction is now
+about half a second, and the GUI hides the frozen picture and mutes the receiver in that time.
+
 ## Applying
 
 From the repo root, against a clean submodule checkout:
