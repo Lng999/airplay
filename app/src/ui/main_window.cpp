@@ -837,6 +837,12 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
             // The close button hides to the tray; Exit in the tray menu really quits.
             if (!exiting_) {
                 saveWindowRect();
+                // Hiding a window the user just closed looks like a crash unless we say
+                // where it went. Once is enough.
+                if (!cfg_.trayHintShown) {
+                    tray_.showBalloon(str::kTrayHintTitle, str::kTrayHintText);
+                    cfg_.trayHintShown = true;
+                }
                 store_.save(cfg_);
                 ShowWindow(hwnd_, SW_HIDE);
                 return 0;

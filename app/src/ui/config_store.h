@@ -54,6 +54,7 @@ struct AppConfig {
     bool         autostartReceiver = false;
     bool         showAdvanced      = false;   // collapsible sections, see PHASE2-UX-SPEC
     bool         showDetails       = false;
+    bool         trayHintShown     = false;   // the "still running in the tray" balloon
     std::wstring msysRoot          = L"C:\\msys64";
     std::wstring uxplayPath;                   // empty => not found, UI shows an error
 

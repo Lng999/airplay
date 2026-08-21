@@ -61,6 +61,20 @@ void Tray::setTip(const std::wstring& tip) {
     Shell_NotifyIconW(NIM_MODIFY, &nid);
 }
 
+void Tray::showBalloon(const std::wstring& title, const std::wstring& text) const {
+    if (!added_ || !owner_) return;
+    NOTIFYICONDATAW nid;
+    ZeroMemory(&nid, sizeof(nid));
+    nid.cbSize = sizeof(nid);
+    nid.hWnd   = owner_;
+    nid.uID    = kIconId;
+    nid.uFlags = NIF_INFO;
+    nid.dwInfoFlags = NIIF_INFO;
+    lstrcpynW(nid.szInfoTitle, title.c_str(), static_cast<int>(ARRAYSIZE(nid.szInfoTitle)));
+    lstrcpynW(nid.szInfo, text.c_str(), static_cast<int>(ARRAYSIZE(nid.szInfo)));
+    Shell_NotifyIconW(NIM_MODIFY, &nid);
+}
+
 int Tray::trackMenu(HWND owner, bool running) const {
     HMENU menu = CreatePopupMenu();
     if (!menu) return kTrayNone;

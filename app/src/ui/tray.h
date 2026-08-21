@@ -34,6 +34,10 @@ public:
 
     void setTip(const std::wstring& tip);
 
+    // One-shot notification balloon (NIF_INFO). Silently does nothing when the icon is
+    // not registered or the user has notifications turned off - it is never load-bearing.
+    void showBalloon(const std::wstring& title, const std::wstring& text) const;
+
     // Blocking popup menu at the cursor; returns a TrayCommand (kTrayNone if dismissed).
     int trackMenu(HWND owner, bool running) const;
 
