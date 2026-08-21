@@ -14,6 +14,12 @@ Her satır: `[ ]` bekliyor · `[x] YYYY-MM-DD` doğrulandı · `[!]` başarısı
 - Notlar: dahili mDNS (lib/mdnsd + patches/0001), video `d3d11videosink`, ses `wasapi2sink`, build 2026-08-21, iPhone 13; PC Ethernet 192.168.1.107 ↔ iPhone Wi-Fi aynı modem
 
 ## Phase 2 — Kendi GUI'miz
+- [ ] Sade ekran (M1.5): Başlat → nokta maviye döner, "Hazır" + "iPhone: Denetim Merkezi → …"
+      satırı doğru adı ve IP'yi gösteriyor; iPhone'dan bağlanınca nokta yeşil, "Bağlandı" +
+      cihaz adı
+- [ ] Gelişmiş / Ayrıntılar açılıp kapanınca pencere düzgün büyüyüp küçülüyor, düzen bozulmuyor
+- [ ] Kapat düğmesi → bildirim balonu bir kez çıkıyor, uygulama bildirim alanında kalıyor,
+      sağ tık → Çıkış gerçekten kapatıyor (child uxplay.exe de gidiyor)
 - [ ] GUI açılınca "waiting" durumu, bağlanınca "connected" + cihaz adı/çözünürlük/FPS
 - [ ] Pencere boyutlandırma aspect-ratio koruyor
 - [ ] Tam ekran / always-on-top / tray ikonu / tek örnek (ikinci açılış öne getirir)
