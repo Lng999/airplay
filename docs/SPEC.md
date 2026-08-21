@@ -62,6 +62,7 @@ iPhone 13 → **Windows 10 Pro 22H2** PC (ortam envanteri: Win11 değil; Ryzen 5
 
 ### Phase 0 sonrası bulunan upstream kusurları (patches/)
 - `0001` **[KAPANDI]** dahili mDNS A kaydı 127.0.0.1 ilan ediyordu (`mdnsd.c:348-373`, multicast hedefe connect+getsockname; bkz. docs/research/mdnsd-windows-rca.md). Yama: GetAdaptersAddresses ile default-gateway adaptörü. 2026-08-21 iPhone ile doğrulandı. Upstream'e PR adayı.
+- `0003` **[KAPANDI]** Windows'ta ASCII dışı `-n <ad>` kullanılamıyordu: `uxplay.exe` `-municode` olmadan derlendiği için `argv[]` ANSI kod sayfasından geliyor, `CreateProcessW` ile başlatan her çağıran (bizim GUI, cmd, PowerShell) `-n Salon Odası`'nı CP1254 bayt olarak teslim ediyor, `is_utf8()` reddedip `exit(0)` yapıyor (`uxplay.cpp:1204-1210`) — çağırana temiz kapanış gibi görünüyor. Yama gömülü manifest ile `activeCodePage=UTF-8` (Win10 1903+). 2026-08-21 doğrulandı. Upstream'e PR adayı (0001 ile birlikte).
 - `0002` `CtrlHandler` CTRL_BREAK'i işlemiyor → GUI'den durdurunca `cleanup()` koşmuyor. Yama uygulandı (build.sh otomatik uyguluyor).
 
 ## 4. Teslimatlar (bu geçiş)
