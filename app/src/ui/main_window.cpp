@@ -66,6 +66,20 @@ std::wstring getText(HWND h) {
     return out;
 }
 
+// The status dot. Colours are picked for the light system theme the rest of the window
+// already assumes (COLOR_BTNFACE background).
+COLORREF stateColor(airplay::HostState st) {
+    switch (st) {
+        case airplay::HostState::Waiting:   return RGB(0x1c, 0x6c, 0xc8);   // blue: advertising
+        case airplay::HostState::Connected: return RGB(0x1a, 0x9c, 0x4a);   // green: mirroring
+        case airplay::HostState::Starting:
+        case airplay::HostState::Stopping:  return RGB(0xd8, 0x8a, 0x16);   // amber: transient
+        case airplay::HostState::Error:     return RGB(0xc4, 0x28, 0x28);   // red
+        case airplay::HostState::Stopped:
+        default:                            return RGB(0x96, 0x96, 0x96);   // grey: idle
+    }
+}
+
 bool isChecked(HWND h) { return SendMessageW(h, BM_GETCHECK, 0, 0) == BST_CHECKED; }
 void setChecked(HWND h, bool on) {
     SendMessageW(h, BM_SETCHECK, on ? BST_CHECKED : BST_UNCHECKED, 0);
@@ -305,9 +319,11 @@ void MainWindow::layout() {
     // Single top-to-bottom flow: what the user needs first is highest up, and a collapsed
     // group simply does not advance y, so nothing above it moves.
     int y = s(12);
-    place(status_, m, y, contentW, s(28));
+    const int textX = m + s(22);        // leaves room for the status dot
+    const int textW = contentW - s(22);
+    place(status_, textX, y, textW, s(28));
     y += s(30);
-    place(hint_, m, y, contentW, s(18));
+    place(hint_, textX, y, textW, s(18));
     y += s(32);
 
     place(lblName_, m, y + s(5), s(132), s(16));
@@ -465,6 +481,8 @@ void MainWindow::updateStatus() {
     }
     SetWindowTextW(status_, text.c_str());
     SetWindowTextW(hint_, hint.c_str());
+    RECT dot{0, 0, s(40), s(48)};
+    InvalidateRect(hwnd_, &dot, TRUE);
 
     const std::wstring title = std::wstring(str::kAppName) + str::kTitleSep + text;
     tray_.setTip(title);
@@ -796,6 +814,26 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
         case WM_COMMAND:
             onCommand(LOWORD(wp), HIWORD(wp));
             return 0;
+
+        case WM_PAINT: {
+            PAINTSTRUCT ps{};
+            HDC dc = BeginPaint(hwnd_, &ps);
+            const int d = s(13);
+            const int x = s(14);
+            const int yy = s(12) + (s(28) - d) / 2;
+            const COLORREF c = stateColor(state_);
+            HBRUSH br = CreateSolidBrush(c);
+            HPEN   pen = CreatePen(PS_SOLID, 1, c);
+            HGDIOBJ oldBr = SelectObject(dc, br);
+            HGDIOBJ oldPen = SelectObject(dc, pen);
+            Ellipse(dc, x, yy, x + d, yy + d);
+            SelectObject(dc, oldBr);
+            SelectObject(dc, oldPen);
+            DeleteObject(br);
+            DeleteObject(pen);
+            EndPaint(hwnd_, &ps);
+            return 0;
+        }
 
         case WM_CTLCOLORSTATIC: {
             auto dc = reinterpret_cast<HDC>(wp);
