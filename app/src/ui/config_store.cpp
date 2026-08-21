@@ -183,6 +183,7 @@ void ConfigStore::load(AppConfig& cfg) const {
     cfg.showAdvanced      = readBool(f, L"app", L"show_advanced",      cfg.showAdvanced);
     cfg.showDetails       = readBool(f, L"app", L"show_details",       cfg.showDetails);
     cfg.trayHintShown     = readBool(f, L"app", L"tray_hint_shown",    cfg.trayHintShown);
+    cfg.hideWhenStalled   = readBool(f, L"app", L"hide_when_stalled",  cfg.hideWhenStalled);
     cfg.msysRoot          = readStr (f, L"app", L"msys_root",          cfg.msysRoot);
     cfg.uxplayPath        = readStr (f, L"app", L"uxplay_path",        L"");
 
@@ -223,6 +224,7 @@ void ConfigStore::save(const AppConfig& cfg) const {
     writeInt(f, L"app", L"show_advanced",      cfg.showAdvanced ? 1 : 0);
     writeInt(f, L"app", L"show_details",       cfg.showDetails ? 1 : 0);
     writeInt(f, L"app", L"tray_hint_shown",    cfg.trayHintShown ? 1 : 0);
+    writeInt(f, L"app", L"hide_when_stalled",  cfg.hideWhenStalled ? 1 : 0);
     writeStr(f, L"app", L"msys_root",          cfg.msysRoot);
     writeStr(f, L"app", L"uxplay_path",        cfg.uxplayPath);
 

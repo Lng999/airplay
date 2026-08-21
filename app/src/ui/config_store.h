@@ -61,6 +61,8 @@ struct AppConfig {
     bool         showAdvanced      = false;   // collapsible sections, see PHASE2-UX-SPEC
     bool         showDetails       = false;
     bool         trayHintShown     = false;   // the "still running in the tray" balloon
+    bool         hideWhenStalled   = true;    // hide the frozen picture while the phone sleeps
+                                              // (no UI: an escape hatch, not a preference)
     std::wstring msysRoot          = L"C:\\msys64";
     std::wstring uxplayPath;                   // empty => not found, UI shows an error
 

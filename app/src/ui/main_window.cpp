@@ -470,6 +470,7 @@ HWND MainWindow::findVideoWindow() const {
 }
 
 void MainWindow::applyMirrorVisibility() {
+    if (!cfg_.hideWhenStalled) return;
     if (mirrorStalled_) {
         HWND v = findVideoWindow();
         if (!v) return;
