@@ -37,6 +37,9 @@ private:
     void createControls();
     void createFonts();
     void layout();
+    void applySectionVisibility();
+    void resizeToContent();
+    int  chromeHeight() const;
     void controlsFromConfig();
     void configFromControls();
 
@@ -69,10 +72,15 @@ private:
     HWND chkFullscreen_ = nullptr, chkH265_ = nullptr, chkDebug_ = nullptr;
     HWND chkAlwaysOnTop_ = nullptr, chkAutostart_ = nullptr;
     HWND btnToggle_ = nullptr, btnCopy_ = nullptr;   // one button: Start <-> Stop
+    HWND secAdvanced_ = nullptr, secDetails_ = nullptr;   // collapsible section headers
     HWND listLog_ = nullptr;
 
     HFONT fontUi_ = nullptr, fontStatus_ = nullptr;
     int   dpi_ = 96;
+
+    // Collapsed by default: the plain window is status + name + one button.
+    bool showAdvanced_ = false, showDetails_ = false;
+    int  logTop_ = 0;   // y of the log area, set by layout(); drives resizeToContent()
 
     airplay::UxplayHost host_;
     UiLog log_;

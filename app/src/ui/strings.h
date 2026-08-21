@@ -51,6 +51,9 @@ inline constexpr const wchar_t* kBtnStop     = L"Durdur";
 inline constexpr const wchar_t* kBtnCopyCmd  = L"Komutu kopyala";
 inline constexpr const wchar_t* kSecAdvanced = L"Gelişmiş";
 inline constexpr const wchar_t* kSecDetails  = L"Ayrıntılar";
+// Prefix on a section button; the glyphs live in Segoe UI itself, no symbol font needed.
+inline constexpr const wchar_t* kSecClosed   = L"► ";   // right-pointing triangle
+inline constexpr const wchar_t* kSecOpen     = L"▼ ";   // down-pointing triangle
 
 // --- messages ---------------------------------------------------------------
 inline constexpr const wchar_t* kErrNoUxplay =

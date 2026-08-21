@@ -32,6 +32,8 @@ enum : int {
     IDC_CHK_AUTOSTART,
     IDC_BTN_TOGGLE,
     IDC_BTN_COPY,
+    IDC_SEC_ADVANCED,
+    IDC_SEC_DETAILS,
     IDC_LIST_LOG
 };
 
@@ -263,6 +265,14 @@ void MainWindow::createControls() {
     btnToggle_ = mk(L"BUTTON", str::kBtnStart, BS_DEFPUSHBUTTON | WS_TABSTOP, IDC_BTN_TOGGLE);
     btnCopy_   = mk(L"BUTTON", str::kBtnCopyCmd, BS_PUSHBUTTON | WS_TABSTOP, IDC_BTN_COPY);
 
+    // Flat, left-aligned buttons so they read as section headers rather than actions.
+    secAdvanced_ = mk(L"BUTTON", str::kSecAdvanced, BS_PUSHBUTTON | BS_FLAT | BS_LEFT |
+                                                        WS_TABSTOP,
+                      IDC_SEC_ADVANCED);
+    secDetails_  = mk(L"BUTTON", str::kSecDetails, BS_PUSHBUTTON | BS_FLAT | BS_LEFT |
+                                                       WS_TABSTOP,
+                      IDC_SEC_DETAILS);
+
     listLog_ = CreateWindowExW(WS_EX_CLIENTEDGE, L"LISTBOX", L"",
                                kChild | WS_VSCROLL | WS_HSCROLL | WS_TABSTOP | LBS_NOSEL |
                                    LBS_NOINTEGRALHEIGHT | LBS_DISABLENOSCROLL,
@@ -273,7 +283,7 @@ void MainWindow::createControls() {
     HWND all[] = {status_,     hint_,           lblName_,       editName_,      lblPort_,
                   editPort_,   lblVideo_,       cmbVideo_,      lblAudio_,      cmbAudio_,
                   chkFullscreen_, chkH265_,     chkDebug_,      chkAlwaysOnTop_, chkAutostart_,
-                  btnToggle_,  btnCopy_,        listLog_};
+                  btnToggle_,  btnCopy_,        secAdvanced_,   secDetails_,    listLog_};
     for (HWND h : all)
         if (h) SendMessageW(h, WM_SETFONT, reinterpret_cast<WPARAM>(fontUi_), TRUE);
     if (status_) SendMessageW(status_, WM_SETFONT, reinterpret_cast<WPARAM>(fontStatus_), TRUE);
@@ -292,8 +302,8 @@ void MainWindow::layout() {
         if (h) SetWindowPos(h, nullptr, x, y, w, hh, SWP_NOZORDER | SWP_NOACTIVATE);
     };
 
-    // Single top-to-bottom flow: what the user needs first is highest up, and the groups
-    // below it can be hidden without any of the coordinates above changing.
+    // Single top-to-bottom flow: what the user needs first is highest up, and a collapsed
+    // group simply does not advance y, so nothing above it moves.
     int y = s(12);
     place(status_, m, y, contentW, s(28));
     y += s(30);
@@ -307,32 +317,76 @@ void MainWindow::layout() {
     place(btnToggle_, m, y, s(160), s(34));
     y += s(48);
 
-    // --- advanced group ---
-    place(lblPort_, m, y + s(5), s(36), s(16));
-    place(editPort_, m + s(40), y, s(70), s(24));
-    y += s(32);
-    place(lblVideo_, m, y + s(5), s(88), s(16));
-    place(cmbVideo_, m + s(92), y, s(170), s(220));
-    y += s(30);
-    place(lblAudio_, m, y + s(5), s(88), s(16));
-    place(cmbAudio_, m + s(92), y, s(170), s(220));
-    y += s(32);
-    place(chkFullscreen_, m, y, s(88), s(20));
-    place(chkH265_, m + s(92), y, s(62), s(20));
-    place(chkDebug_, m + s(158), y, s(122), s(20));
-    y += s(24);
-    place(chkAlwaysOnTop_, m, y, s(118), s(20));
-    place(chkAutostart_, m + s(124), y, s(170), s(20));
-    y += s(28);
-    place(btnCopy_, m, y, s(140), s(28));
-    y += s(38);
+    // --- advanced (collapsible) ---
+    place(secAdvanced_, m, y, s(160), s(22));
+    y += s(26);
+    if (showAdvanced_) {
+        place(lblPort_, m, y + s(5), s(36), s(16));
+        place(editPort_, m + s(40), y, s(70), s(24));
+        y += s(32);
+        place(lblVideo_, m, y + s(5), s(88), s(16));
+        place(cmbVideo_, m + s(92), y, s(170), s(220));
+        y += s(30);
+        place(lblAudio_, m, y + s(5), s(88), s(16));
+        place(cmbAudio_, m + s(92), y, s(170), s(220));
+        y += s(32);
+        place(chkFullscreen_, m, y, s(88), s(20));
+        place(chkH265_, m + s(92), y, s(62), s(20));
+        place(chkDebug_, m + s(158), y, s(122), s(20));
+        y += s(24);
+        place(chkAlwaysOnTop_, m, y, s(118), s(20));
+        place(chkAutostart_, m + s(124), y, s(170), s(20));
+        y += s(28);
+        place(btnCopy_, m, y, s(140), s(28));
+        y += s(36);
+    }
 
-    // --- log ---
-    int listH = H - y - m;
-    if (listH < s(60)) listH = s(60);
-    place(listLog_, m, y, contentW, listH);
+    // --- details / log (collapsible) ---
+    place(secDetails_, m, y, s(160), s(22));
+    y += s(26);
+    logTop_ = y;
+    if (showDetails_) {
+        int listH = H - y - m;
+        if (listH < s(60)) listH = s(60);
+        place(listLog_, m, y, contentW, listH);
+    }
 
     InvalidateRect(hwnd_, nullptr, TRUE);
+}
+
+void MainWindow::applySectionVisibility() {
+    const int adv = showAdvanced_ ? SW_SHOW : SW_HIDE;
+    for (HWND h : {lblPort_, editPort_, lblVideo_, cmbVideo_, lblAudio_, cmbAudio_,
+                   chkFullscreen_, chkH265_, chkDebug_, chkAlwaysOnTop_, chkAutostart_,
+                   btnCopy_})
+        if (h) ShowWindow(h, adv);
+    if (listLog_) ShowWindow(listLog_, showDetails_ ? SW_SHOW : SW_HIDE);
+
+    if (secAdvanced_)
+        SetWindowTextW(secAdvanced_,
+                       (std::wstring(showAdvanced_ ? str::kSecOpen : str::kSecClosed) +
+                        str::kSecAdvanced).c_str());
+    if (secDetails_)
+        SetWindowTextW(secDetails_,
+                       (std::wstring(showDetails_ ? str::kSecOpen : str::kSecClosed) +
+                        str::kSecDetails).c_str());
+}
+
+int MainWindow::chromeHeight() const {
+    RECT r{0, 0, 100, 100};
+    AdjustWindowRectEx(&r, WS_OVERLAPPEDWINDOW, FALSE, 0);
+    return (r.bottom - r.top) - 100;
+}
+
+// Grow/shrink the window so the visible sections fit exactly. The user's width is kept:
+// only the height follows the sections.
+void MainWindow::resizeToContent() {
+    if (!hwnd_ || IsIconic(hwnd_) || IsZoomed(hwnd_)) return;
+    RECT wr{};
+    if (!GetWindowRect(hwnd_, &wr)) return;
+    const int client = logTop_ + (showDetails_ ? s(170) : 0) + s(14);
+    SetWindowPos(hwnd_, nullptr, 0, 0, wr.right - wr.left, client + chromeHeight(),
+                 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
 void MainWindow::controlsFromConfig() {
@@ -626,6 +680,15 @@ void MainWindow::onCommand(int id, int code) {
         case IDC_BTN_COPY:
             doCopyCmdline();
             break;
+        case IDC_SEC_ADVANCED:
+        case IDC_SEC_DETAILS: {
+            bool& flag = (id == IDC_SEC_ADVANCED) ? showAdvanced_ : showDetails_;
+            flag = !flag;
+            applySectionVisibility();
+            layout();
+            resizeToContent();
+            break;
+        }
         case IDC_CHK_ALWAYSONTOP:
             cfg_.alwaysOnTop = isChecked(chkAlwaysOnTop_);
             applyAlwaysOnTop();
@@ -677,11 +740,13 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
                                           : L"uxplay.exe: " + cfg_.uxplayPath);
 
             controlsFromConfig();
+            applySectionVisibility();
 
             if (cfg_.w < 200 || cfg_.h < 200)
-                SetWindowPos(hwnd_, nullptr, 0, 0, s(470), s(540),
+                SetWindowPos(hwnd_, nullptr, 0, 0, s(470), s(300),
                              SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
             layout();
+            resizeToContent();
 
             tray_.add(hwnd_, WM_TRAY);
 
@@ -741,7 +806,9 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
         case WM_GETMINMAXINFO: {
             auto* mmi = reinterpret_cast<MINMAXINFO*>(lp);
             mmi->ptMinTrackSize.x = s(450);
-            mmi->ptMinTrackSize.y = s(420);
+            // logTop_ is 0 until the first layout(); s(250) covers the collapsed window.
+            mmi->ptMinTrackSize.y = (logTop_ > 0 ? logTop_ : s(250)) +
+                                    (showDetails_ ? s(80) : 0) + s(14) + chromeHeight();
             return 0;
         }
 
@@ -751,7 +818,7 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
             for (HWND h : {status_, hint_, lblName_, editName_, lblPort_, editPort_,
                            lblVideo_, cmbVideo_, lblAudio_, cmbAudio_, chkFullscreen_,
                            chkH265_, chkDebug_, chkAlwaysOnTop_, chkAutostart_,
-                           btnToggle_, btnCopy_, listLog_})
+                           btnToggle_, btnCopy_, secAdvanced_, secDetails_, listLog_})
                 if (h) SendMessageW(h, WM_SETFONT, reinterpret_cast<WPARAM>(fontUi_), TRUE);
             if (status_)
                 SendMessageW(status_, WM_SETFONT, reinterpret_cast<WPARAM>(fontStatus_), TRUE);
