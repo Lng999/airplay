@@ -68,9 +68,10 @@ The window is Turkish and collapsed by default (`docs/PHASE2-UX-SPEC.md`): a col
 dot, the state, one line saying what to do next, the receiver name and a single Start/Stop
 button. Two section headers open the rest:
 
-- **Gelişmiş** — port, video/audio sink, Fullscreen, H.265, Ayrıntılı günlük (debug), Always
-  on top, Start receiver on launch and *Komutu kopyala* (the exact argv, for reproducing a
-  problem in a plain terminal).
+- **Gelişmiş** — port, **Akıcılık** (the frame-rate ceiling), video/audio sink, **Görüntü
+  çözücü** (decoder), Fullscreen, H.265, Ayrıntılı günlük (debug), the client FPS-report
+  switch, Always on top, Start receiver on launch and *Komutu kopyala* (the exact argv, for
+  reproducing a problem in a plain terminal).
 - **Ayrıntılar** — the last 500 log lines.
 
 Opening or closing a section re-fits the window height and is remembered in `config.ini`.
@@ -108,6 +109,13 @@ audio_sink=autoaudiosink
 fullscreen=0
 h265=0
 debug=0             ; -d; verbose, and the only way to get resolution numbers
+max_fps=60          ; -fps n; the maxFPS plist item the client obeys. UxPlay's own default
+                    ; is 30 (lib/raop.c:623) and is the main reason mirroring can look choppy.
+                    ; 0 = omit -fps and take that default.
+video_decoder=      ; -vd; empty = "decodebin", which picks by GStreamer rank. On this machine
+                    ; that is d3d12h264dec (258) while the sink is d3d11videosink, so frames
+                    ; cross the D3D12/D3D11 boundary; d3d11h264dec keeps one API.
+fps_data=0          ; -FPSdata; the client's streaming performance reports (XML) into the log
 nohold=1
 reset=15            ; -reset N, 0 disables the missed-feedback timeout
 

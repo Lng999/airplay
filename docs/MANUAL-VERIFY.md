@@ -11,6 +11,12 @@ Her satır: `[ ]` bekliyor · `[x] YYYY-MM-DD` doğrulandı · `[!]` başarısı
 - [ ] Döndürme (portrait↔landscape) düzgün
 - [ ] iPhone'dan "Yansıtmayı Durdur" → uxplay temiz şekilde beklemeye dönüyor, tekrar bağlanabiliyor
 - [ ] Gecikme kabul edilebilir (ms tahmini not edilsin)
+- [ ] **Akıcılık:** 30 FPS ile 60 FPS arasında gözle görülür fark var mı? (Gelişmiş →
+      Akıcılık; değişiklik Durdur/Başlat gerektirir). `-fps` iPhone'a `maxFPS` olarak
+      gidiyor, varsayılanı 30 (`lib/raop.c:623`)
+- [ ] **Görüntü çözücü:** Otomatik (d3d12h264dec) ile Direct3D 11 arasında fark var mı?
+      Sink d3d11videosink olduğu için Otomatik'te her kare API sınırını geçiyor
+- [ ] İstemci FPS raporu açıkken günlükteki XML gerçekte kaç fps geldiğini gösteriyor mu
 - Notlar: dahili mDNS (lib/mdnsd + patches/0001), video `d3d11videosink`, ses `wasapi2sink`, build 2026-08-21, iPhone 13; PC Ethernet 192.168.1.107 ↔ iPhone Wi-Fi aynı modem
 
 ## Phase 2 — Kendi GUI'miz
