@@ -466,6 +466,16 @@ HWND MainWindow::findVideoWindow() const {
     return c.found;
 }
 
+void MainWindow::setStalled(bool stalled) {
+    lastFpsTick_ = GetTickCount();
+    if (stalled == mirrorStalled_) return;
+    mirrorStalled_ = stalled;
+    applyMirrorVisibility();
+    updateStatus();
+    logUi(stalled ? L"mirror stalled: no frames from the client (screen off)"
+                  : L"mirror resumed: frames are arriving again");
+}
+
 void MainWindow::applyMirrorVisibility() {
     if (!cfg_.hideWhenStalled) return;
     // Audio keeps flowing while the phone sleeps, so hiding the picture alone would leave a
@@ -835,25 +845,24 @@ void MainWindow::onHostEvent(const airplay::HostEvent& ev) {
                         str::kAppName, MB_ICONINFORMATION | MB_OK);
             break;
 
+        // Fast path (patches/0004): the receiver itself watches the frame timestamps and
+        // says so within ~400 ms. This is what the user sees react.
+        case K::MirrorActivity:
+            setStalled(ev.srcWidth == 0);
+            break;
+
+        // Slow path: the client's own once-a-second reports. Kept as the frame-rate readout
+        // and as a backstop if the receiver is ever built without patch 0004.
         case K::MirrorFps: {
             lastFpsTick_ = GetTickCount();
             if (ev.srcWidth == 0) {
-                // Two in a row, so a single dropped report does not blink the window away.
-                if (++zeroFpsReports_ >= 2 && !mirrorStalled_) {
-                    mirrorStalled_ = true;
-                    applyMirrorVisibility();
-                    updateStatus();
-                    logUi(L"mirror stalled: client is producing no frames (screen off)");
-                }
+                // Two in a row, so a single dropped report cannot blink the window away.
+                if (++zeroFpsReports_ >= 2) setStalled(true);
                 break;
             }
             zeroFpsReports_ = 0;
             currentFps_ = ev.srcWidth;
-            if (mirrorStalled_) {
-                mirrorStalled_ = false;
-                applyMirrorVisibility();
-                logUi(L"mirror resumed: frames are arriving again");
-            }
+            setStalled(false);
             updateStatus();
             break;
         }

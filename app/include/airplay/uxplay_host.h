@@ -32,6 +32,10 @@ enum class HostEventKind {
     // It falls to 0 while the screen is off - the session and the video window stay alive,
     // so the last frame would otherwise hang on screen - and rises again on wake. Requires
     // -FPSdata; without it this event never arrives.
+    // patches/0004 reports the video stream going quiet and coming back, checked every
+    // 200 ms against the per-frame timestamp - about five times faster than waiting for the
+    // client's own once-a-second reports. srcWidth: 1 = frames flowing, 0 = idle.
+    MirrorActivity,
     MirrorFps,
     Warning,         // "*** WARNING: ..." line
     Error            // "*** ERROR: ..." line (does not necessarily change state)

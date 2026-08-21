@@ -49,6 +49,7 @@ const char* kindName(HostEventKind k) {
     case HostEventKind::Ports:        return "Ports";
     case HostEventKind::Resolution:   return "Resolution";
     case HostEventKind::MirrorFps:    return "MirrorFps";
+    case HostEventKind::MirrorActivity: return "MirrorActivity";
     case HostEventKind::Pin:          return "Pin";
     case HostEventKind::Warning:      return "Warning";
     case HostEventKind::Error:        return "Error";

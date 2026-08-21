@@ -41,6 +41,7 @@ private:
     // The video window belongs to the child (M1: d3d11videosink owns it), so we can only
     // reach it through the window list. Null while stopped or before the first frame.
     HWND findVideoWindow() const;
+    void setStalled(bool stalled);   // single entry point for both signals
     void applyMirrorVisibility();
     void resizeToContent();
     int  chromeHeight() const;

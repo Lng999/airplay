@@ -1,0 +1,68 @@
+diff --git a/uxplay.cpp b/uxplay.cpp
+index 15b9e17..e2aa610 100644
+--- a/uxplay.cpp
++++ b/uxplay.cpp
+@@ -532,6 +532,38 @@ static void dump_video_to_file(unsigned char *data, int datalen) {
+     }
+ }
+ 
++/* --- mirror activity ---------------------------------------------------------------------
++ * A client whose screen is off keeps the session alive and keeps requesting feedback; what
++ * it stops doing is sending video. Its own -FPSdata reports show this, but only once a
++ * second, so a front-end waiting on them reacts in 2-3 seconds. video_process() runs per
++ * frame, so watching its timestamp on a 200 ms timer notices in well under one.
++ */
++static uint64_t last_video_frame_time = 0;
++static bool mirror_idle_reported = false;
++
++static gboolean mirror_activity_callback(gpointer loop) {
++    (void) loop;
++    if (!open_connections) {
++        last_video_frame_time = 0;
++        mirror_idle_reported = false;
++        return TRUE;
++    }
++    if (!last_video_frame_time) {
++        return TRUE;    /* no frame seen yet on this connection */
++    }
++    uint64_t now = get_local_time();
++    bool idle = (now > last_video_frame_time) &&
++                (now - last_video_frame_time > 400 * 1000000ULL);   /* 400 ms */
++    if (idle && !mirror_idle_reported) {
++        LOGI("mirror idle: no video frames from client");
++        mirror_idle_reported = true;
++    } else if (!idle && mirror_idle_reported) {
++        LOGI("mirror active: video frames resumed");
++        mirror_idle_reported = false;
++    }
++    return TRUE;
++}
++
+ static gboolean feedback_callback(gpointer loop) {
+     if (open_connections) {
+         if (missed_feedback_limit && missed_feedback > missed_feedback_limit) {
+@@ -720,6 +753,8 @@ static void main_loop()  {
+     missed_feedback = 0;
+     guint feedback_watch_id = g_timeout_add_seconds(1, (GSourceFunc) feedback_callback, (gpointer) loop);
+     guint reset_watch_id = g_timeout_add(100, (GSourceFunc) reset_callback, (gpointer) loop);
++    guint mirror_activity_id = g_timeout_add(200, (GSourceFunc) mirror_activity_callback,
++                                             (gpointer) loop);
+ 
+ #ifdef _WIN32
+     gmainloop = loop;
+@@ -755,6 +790,7 @@ static void main_loop()  {
+     if (progress_id > 0) g_source_remove(progress_id);
+     if (video_eos_watch_id > 0) g_source_remove(video_eos_watch_id);
+     if (feedback_watch_id > 0) g_source_remove(feedback_watch_id);
++    if (mirror_activity_id > 0) g_source_remove(mirror_activity_id);
+     g_main_loop_unref(loop);
+ }    
+ 
+@@ -2335,6 +2371,7 @@ extern "C" void audio_process (void *cls, raop_ntp_t *ntp, audio_decode_struct *
+ }
+ 
+ extern "C" void video_process (void *cls, raop_ntp_t *ntp, video_decode_struct *data) {
++    last_video_frame_time = get_local_time();   /* read by mirror_activity_callback */
+     if (dump_video) {
+         dump_video_to_file(data->data, data->data_len);
+     }

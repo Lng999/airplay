@@ -33,6 +33,8 @@ enum class LineTag {
     RegisteredClient, // uxplay.cpp:2570  "registered new client: %s DeviceID = %s PK = "
     LostConnection,   // uxplay.cpp:2264 ("*** ERROR ...") and :538 ("***ERROR ...", no space)
     FeedbackTimeout,  // uxplay.cpp:539   "   Interval since last client feedback request exceeds ..."
+    MirrorIdle,       // patches/0004: "mirror idle: no video frames from client"
+    MirrorActive,     // patches/0004: "mirror active: video frames resumed"
     PlistKey,         // "<key>NAME</key>"     from a -FPSdata report; detail = NAME
     PlistInteger,     // "<integer>N</integer>" from a -FPSdata report; detail = N
     PlistNoise,       // any other line of the report envelope (<plist>, <dict>, <real>, ...)

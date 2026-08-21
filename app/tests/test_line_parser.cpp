@@ -409,6 +409,22 @@ void testPlistReport() {
         CHECK_TAG(parseUxplayLineDetailed(noise), LineTag::PlistNoise);
 }
 
+// patches/0004 - the fast stall signal, one line each way.
+void testMirrorActivity() {
+    beginTest("mirror idle/active");
+    ParsedLine idle = parseUxplayLineDetailed("mirror idle: no video frames from client");
+    CHECK_TAG(idle, LineTag::MirrorIdle);
+    const HostEvent* a = find(idle.events, HostEventKind::MirrorActivity);
+    CHECK(a != nullptr);
+    if (a) CHECK_INT(a->srcWidth, 0);
+
+    ParsedLine act = parseUxplayLineDetailed("mirror active: video frames resumed");
+    CHECK_TAG(act, LineTag::MirrorActive);
+    const HostEvent* b = find(act.events, HostEventKind::MirrorActivity);
+    CHECK(b != nullptr);
+    if (b) CHECK_INT(b->srcWidth, 1);
+}
+
 // unknown line -> LogLine only
 void testUnknown() {
     beginTest("unknown line");
@@ -539,6 +555,7 @@ int main() {
     testBareErrorLine();
     testFeedbackLate();
     testPlistReport();
+    testMirrorActivity();
     testUnknown();
     testEolStripping();
     testBuildArgsDefault();

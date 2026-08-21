@@ -134,6 +134,23 @@ ParsedLine parseUxplayLineDetailed(const std::string& rawIn) {
         return out;
     }
 
+    // --- mirror activity (patches/0004). The fast path: reported within ~400 ms of the
+    //     frames stopping, against ~2 s for the client's own reports.
+    if (startsWith(t, "mirror idle:")) {
+        out.tag = LineTag::MirrorIdle;
+        HostEvent ev = makeEvent(HostEventKind::MirrorActivity, t);
+        ev.srcWidth = 0;
+        out.events.push_back(ev);
+        return out;
+    }
+    if (startsWith(t, "mirror active:")) {
+        out.tag = LineTag::MirrorActive;
+        HostEvent ev = makeEvent(HostEventKind::MirrorActivity, t);
+        ev.srcWidth = 1;
+        out.events.push_back(ev);
+        return out;
+    }
+
     // --- -FPSdata report (lib/raop_rtp_mirror.c:807-811 dumps the client's plist as XML).
     //     The client keeps requesting feedback while its screen is off, so the only honest
     //     "no picture is arriving" signal is submitSurfaceFPS dropping to 0 in these reports.
