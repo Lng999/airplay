@@ -41,7 +41,14 @@ Her satır: `[ ]` bekliyor · `[x] YYYY-MM-DD` doğrulandı · `[!]` başarısı
 - [ ] MSYS2 kurulu olmayan temiz bir Windows'ta self-contained klasör çalışıyor
 - [ ] Autostart açıkken oturum açılışında başlıyor
 
+- [ ] Başlat'a basmadan önce elle bir `uxplay.exe` çalıştır → Başlat onu kapatıyor, günlükte
+      "terminated N stale uxplay.exe" satırı var
+- [ ] GUI'yi Görev Yöneticisi'nden zorla kapat → `uxplay.exe` de gidiyor (yetim kalmıyor)
+
 ## Bilinen gotcha'lar (kontrol et)
 - Ağ profili **Private** olmalı; firewall UDP 5353 + UxPlay TCP/UDP portları açık
+- **İki uxplay aynı anda çalışabilir** (SO_REUSEADDR): iPhone yanlış olana bağlanırsa GUI
+  hiçbir olay görmez. Şüphelenirsen: `netstat -ano | findstr 7100` → bağlantının hangi PID'de
+  olduğuna bak
 - UDP 5353'ü Windows svchost + Spotify de dinliyor → çakışma şüphesinde Spotify'ı kapatıp tekrar dene
 - `HOME`/`XDG_CONFIG_HOMEDIR` ayarlı değilse uxplay kalıcı durumunu kaybeder (launcher ayarlamalı)

@@ -81,6 +81,19 @@ startup, so a change needs a restart.
 The status dot: grey idle, amber starting/stopping, blue advertising, green mirroring,
 red error.
 
+### One receiver at a time
+
+Two `uxplay.exe` on one machine do **not** conflict loudly: `SO_REUSEADDR` lets both bind the
+same port and both keep listening, so the phone connects to whichever answers first. When
+that is not our child, the GUI receives no events at all and would act on the wrong process —
+which is exactly how the sleep handling appeared "broken" while it was in fact never reached.
+
+Both ends are closed now: the child runs inside a job object with
+`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` so it cannot outlive the GUI however the GUI dies, and
+**Start** first terminates any process whose image is exactly our `uxplay.exe`
+(`stale_receivers.cpp`), logging how many it removed. A manually launched `AirPlay.bat` is
+therefore closed by pressing Start — deliberately, since the two would otherwise fight.
+
 ### Sleeping phone
 
 Locking the iPhone does **not** end an AirPlay session. It keeps requesting feedback and
