@@ -106,6 +106,15 @@ std::vector<wchar_t> buildChildEnvironment(const ChildEnvConfig& cfg, std::strin
         std::wstring path = getVar(vars, L"PATH");
         setVar(vars, L"PATH", path.empty() ? ucrtBin : ucrtBin + L";" + path);
         setVar(vars, L"GST_PLUGIN_SYSTEM_PATH", root + L"\\ucrt64\\lib\\gstreamer-1.0");
+
+        // The scanner path is compiled into libgstreamer as an absolute path from the build
+        // machine, so a portable copy under a different root would not find it and would fall
+        // back to scanning plugins in-process. Point at our own copy when it is there.
+        const std::wstring scanner =
+            root + L"\\ucrt64\\libexec\\gstreamer-1.0\\gst-plugin-scanner.exe";
+        if (GetFileAttributesW(scanner.c_str()) != INVALID_FILE_ATTRIBUTES) {
+            setVar(vars, L"GST_PLUGIN_SCANNER", scanner);
+        }
     }
 
     // --- HOME / XDG_CONFIG_HOMEDIR (docs/DESIGN.md §5.3) -----------------------------------------
