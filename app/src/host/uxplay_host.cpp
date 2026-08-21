@@ -89,6 +89,11 @@ struct UxplayHost::Impl {
     std::atomic<bool>       stopRequested{false};
 
     HANDLE                  hProcess{nullptr};
+    // The child is put in a job object with KILL_ON_JOB_CLOSE, so it cannot outlive us even
+    // if the GUI is killed outright. An orphaned uxplay.exe is not harmless: SO_REUSEADDR
+    // lets it keep listening on the same port, and the phone may connect to *it* instead of
+    // to our child - the GUI then sees no events at all and acts on the wrong process.
+    HANDLE                  hJob{nullptr};
     HANDLE                  hProcThread{nullptr};
     HANDLE                  hReadPipe{nullptr};
     std::thread             reader;
@@ -143,6 +148,7 @@ struct UxplayHost::Impl {
         if (hReadPipe)   { CloseHandle(hReadPipe);   hReadPipe = nullptr; }
         if (hProcThread) { CloseHandle(hProcThread); hProcThread = nullptr; }
         if (hProcess)    { CloseHandle(hProcess);    hProcess = nullptr; }
+        if (hJob)        { CloseHandle(hJob);        hJob = nullptr; }
         childPid.store(0, std::memory_order_release);
     }
 
@@ -416,6 +422,17 @@ bool UxplayHost::start(const HostConfig& cfg, std::string* err) {
     if (!ok) {
         CloseHandle(readEnd);
         return fail(lastErrorText("CreateProcessW", createErr));
+    }
+
+    // Assign before the first resume-equivalent work happens; a failure here is not fatal,
+    // it only means we lose the orphan protection.
+    impl_->hJob = CreateJobObjectW(nullptr, nullptr);
+    if (impl_->hJob) {
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        SetInformationJobObject(impl_->hJob, JobObjectExtendedLimitInformation, &limits,
+                                sizeof(limits));
+        AssignProcessToJobObject(impl_->hJob, pi.hProcess);
     }
 
     impl_->hProcess = pi.hProcess;
