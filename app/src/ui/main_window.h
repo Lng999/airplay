@@ -17,6 +17,9 @@ class MainWindow {
 public:
     static constexpr UINT WM_HOST_EVENT = WM_APP + 1;   // lParam = airplay::HostEvent* (owned)
     static constexpr UINT WM_TRAY       = WM_APP + 2;   // shell notification-area callback
+    // Both are posted by the updater worker thread and carry an owned heap object.
+    static constexpr UINT WM_UPDATE_CHECKED    = WM_APP + 3;   // lParam = UpdateResult* (owned)
+    static constexpr UINT WM_UPDATE_DOWNLOADED = WM_APP + 4;   // lParam = UpdateResult* (owned)
 
     MainWindow(HINSTANCE hinst, ConfigStore& store, AppConfig& cfg);
     ~MainWindow();
@@ -39,6 +42,12 @@ private:
     void layout();
     void applySectionVisibility();
     void resizeToContent();
+    // Update flow. Each step runs on a throwaway worker thread and posts its result back;
+    // updateBusy_ is the only guard, so a second request while one is in flight is ignored.
+    void startUpdateCheck(bool manual);
+    void startUpdateDownload();
+    void onUpdateChecked(struct UpdateResult* r);
+    void onUpdateDownloaded(struct UpdateResult* r);
     int  chromeHeight() const;
     void controlsFromConfig();
     void configFromControls();
@@ -89,8 +98,12 @@ private:
     UiLog log_;
     Tray  tray_;
 
+    static constexpr UINT_PTR kUpdateTimer = 1;   // one shot, 4 s after the window is up
+
     airplay::HostState state_ = airplay::HostState::Stopped;
     int   currentFps_     = 0;   // last non-zero submitSurfaceFPS, shown in the status line
+    bool  updateBusy_     = false;   // a check or a download is in flight
+    std::wstring updateVersion_, updateUrl_, updatePageUrl_;
     std::wstring clientName_, clientModel_, lastError_, ipv4_;
     std::wstring resolutionText_;   // "1920x1080", only ever filled when debug=true
     bool  exiting_        = false;

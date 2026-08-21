@@ -60,6 +60,7 @@ struct AppConfig {
     bool         showAdvanced      = false;   // collapsible sections, see PHASE2-UX-SPEC
     bool         showDetails       = false;
     bool         trayHintShown     = false;   // the "still running in the tray" balloon
+    bool         autoUpdate        = true;    // check GitHub for a newer release at startup
     std::wstring msysRoot;                     // empty => no runtime tree found
     std::wstring uxplayPath;                   // empty => not found, UI shows an error
     // Whether the two paths above came from config.ini and still resolve here. False means we

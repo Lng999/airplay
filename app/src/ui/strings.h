@@ -18,6 +18,19 @@ inline constexpr const wchar_t* kTrayShow  = L"Göster";
 inline constexpr const wchar_t* kTrayStart = L"Başlat";
 inline constexpr const wchar_t* kTrayStop  = L"Durdur";
 inline constexpr const wchar_t* kTrayExit  = L"Çıkış";
+inline constexpr const wchar_t* kTrayUpdate = L"Güncellemeleri kontrol et";
+
+// --- updates ----------------------------------------------------------------
+inline constexpr const wchar_t* kUpdateTitle    = L"Yeni sürüm";
+inline constexpr const wchar_t* kUpdateFoundPre = L"Yeni bir sürüm çıktı: ";
+inline constexpr const wchar_t* kUpdateAskTail  =
+    L"\n\nŞimdi indirilip kurulsun mu? Kurulum sırasında uygulama kapanıp yeniden açılacak.";
+inline constexpr const wchar_t* kUpdateNone     = L"Zaten en güncel sürümü kullanıyorsunuz.";
+inline constexpr const wchar_t* kUpdateChecking = L"Güncelleme kontrol ediliyor…";
+inline constexpr const wchar_t* kUpdateFailPre  = L"Güncelleme kontrolü başarısız: ";
+inline constexpr const wchar_t* kUpdateDownloading = L"Yeni sürüm indiriliyor…";
+inline constexpr const wchar_t* kUpdateNoAsset  =
+    L"Bu sürüm için kurulum dosyası bulunamadı. Sürüm sayfası tarayıcıda açılsın mı?";
 
 // --- status line ------------------------------------------------------------
 inline constexpr const wchar_t* kStateStopped  = L"Kapalı";

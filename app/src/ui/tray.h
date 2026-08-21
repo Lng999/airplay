@@ -10,10 +10,11 @@ namespace ui {
 // Command ids returned by Tray::trackMenu(); the main window maps them onto its own actions.
 enum TrayCommand : int {
     kTrayNone  = 0,
-    kTrayShow  = 40001,
-    kTrayStart = 40002,
-    kTrayStop  = 40003,
-    kTrayExit  = 40004
+    kTrayShow   = 40001,
+    kTrayStart  = 40002,
+    kTrayStop   = 40003,
+    kTrayExit   = 40004,
+    kTrayUpdate = 40005
 };
 
 class Tray {

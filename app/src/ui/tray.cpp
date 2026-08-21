@@ -90,6 +90,8 @@ int Tray::trackMenu(HWND owner, bool running) const {
     AppendMenuW(menu, MF_STRING | (running ? MF_GRAYED : 0), kTrayStart, str::kTrayStart);
     AppendMenuW(menu, MF_STRING | (running ? 0 : MF_GRAYED), kTrayStop, str::kTrayStop);
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(menu, MF_STRING, kTrayUpdate, str::kTrayUpdate);
+    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(menu, MF_STRING, kTrayExit, str::kTrayExit);
     SetMenuDefaultItem(menu, kTrayShow, FALSE);
 

@@ -3,6 +3,7 @@
 #include <commctrl.h>
 #include <ipifcons.h>
 #include <iphlpapi.h>
+#include <shellapi.h>
 #include <ws2tcpip.h>
 
 #include <cstdio>
@@ -12,8 +13,21 @@
 #include "single_instance.h"
 #include "stale_receivers.h"
 #include "strings.h"
+#include "updater.h"
+#include "version.h"
 
 namespace ui {
+
+// What an updater worker thread hands back to the window. Allocated by the thread, deleted
+// by the window procedure - the same ownership rule as WM_HOST_EVENT.
+struct UpdateResult {
+    UpdateInfo   info;
+    std::string  err;          // UTF-8, empty on success
+    bool         found = false;   // a newer release exists
+    bool         manual = false;  // the user asked, so "up to date" is worth saying out loud
+    std::wstring localPath;    // WM_UPDATE_DOWNLOADED: the installer on disk
+};
+
 namespace {
 
 enum : int {
@@ -440,6 +454,148 @@ void MainWindow::applySectionVisibility() {
                         str::kSecDetails).c_str());
 }
 
+// --- updates ---------------------------------------------------------------------------------
+// Both workers own their job struct and the UpdateResult they post; the window procedure takes
+// the result over and deletes it. Nothing here touches a HWND except through PostMessageW.
+
+namespace {
+
+struct UpdateJob {
+    HWND         hwnd    = nullptr;
+    bool         manual  = false;
+    std::wstring url;        // download job only
+    std::wstring version;    // download job only
+};
+
+DWORD WINAPI updateCheckThread(LPVOID p) {
+    UpdateJob* job = static_cast<UpdateJob*>(p);
+    auto* r = new UpdateResult();
+    r->manual = job->manual;
+    r->found  = checkForUpdate(r->info, &r->err);
+    if (!PostMessageW(job->hwnd, MainWindow::WM_UPDATE_CHECKED, 0,
+                      reinterpret_cast<LPARAM>(r))) {
+        delete r;
+    }
+    delete job;
+    return 0;
+}
+
+DWORD WINAPI updateDownloadThread(LPVOID p) {
+    UpdateJob* job = static_cast<UpdateJob*>(p);
+    auto* r = new UpdateResult();
+    r->info.version = job->version;
+    const std::wstring dest = installerDownloadPath(job->version);
+    r->found = downloadFile(job->url, dest, &r->err);
+    if (r->found) r->localPath = dest;
+    if (!PostMessageW(job->hwnd, MainWindow::WM_UPDATE_DOWNLOADED, 0,
+                      reinterpret_cast<LPARAM>(r))) {
+        delete r;
+    }
+    delete job;
+    return 0;
+}
+
+} // namespace
+
+void MainWindow::startUpdateCheck(bool manual) {
+    if (updateBusy_) return;
+    if (manual) logUi(str::kUpdateChecking);
+
+    auto* job = new UpdateJob{hwnd_, manual, {}, {}};
+    HANDLE t = CreateThread(nullptr, 0, updateCheckThread, job, 0, nullptr);
+    if (!t) { delete job; return; }
+    CloseHandle(t);
+    updateBusy_ = true;
+}
+
+void MainWindow::startUpdateDownload() {
+    if (updateBusy_ || updateUrl_.empty()) return;
+    logUi(str::kUpdateDownloading);
+
+    auto* job = new UpdateJob{hwnd_, false, updateUrl_, updateVersion_};
+    HANDLE t = CreateThread(nullptr, 0, updateDownloadThread, job, 0, nullptr);
+    if (!t) { delete job; return; }
+    CloseHandle(t);
+    updateBusy_ = true;
+}
+
+void MainWindow::onUpdateChecked(UpdateResult* r) {
+    updateBusy_ = false;
+
+    if (!r->err.empty()) {
+        logUi(std::wstring(str::kUpdateFailPre) + widen(r->err));
+        if (r->manual) {
+            MessageBoxW(hwnd_, (std::wstring(str::kUpdateFailPre) + widen(r->err)).c_str(),
+                        str::kAppName, MB_ICONWARNING | MB_OK);
+        }
+        return;
+    }
+    if (!r->found) {
+        logUi(L"update: already on the latest release (" AIRPLAY_VERSION_WSTR L")");
+        if (r->manual) {
+            MessageBoxW(hwnd_, str::kUpdateNone, str::kAppName, MB_ICONINFORMATION | MB_OK);
+        }
+        return;
+    }
+
+    updateVersion_ = r->info.version;
+    updateUrl_     = r->info.downloadUrl;
+    updatePageUrl_ = r->info.pageUrl;
+    logUi(L"update: " + updateVersion_ + L" is available");
+
+    // A background find is easy to miss behind other windows; say it in the tray too.
+    if (!r->manual) {
+        tray_.showBalloon(str::kUpdateTitle, std::wstring(str::kUpdateFoundPre) + updateVersion_);
+    }
+
+    std::wstring msg = std::wstring(str::kUpdateFoundPre) + updateVersion_;
+    if (!r->info.notes.empty()) msg += L"\n\n" + r->info.notes;
+
+    if (updateUrl_.empty()) {
+        // A release with no installer attached. Nothing to run, so offer the page instead.
+        msg += L"\n\n";
+        msg += str::kUpdateNoAsset;
+        if (MessageBoxW(hwnd_, msg.c_str(), str::kUpdateTitle, MB_ICONINFORMATION | MB_YESNO)
+                == IDYES && !updatePageUrl_.empty()) {
+            ShellExecuteW(hwnd_, L"open", updatePageUrl_.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+        }
+        return;
+    }
+
+    msg += str::kUpdateAskTail;
+    if (MessageBoxW(hwnd_, msg.c_str(), str::kUpdateTitle, MB_ICONQUESTION | MB_YESNO) == IDYES) {
+        startUpdateDownload();
+    }
+}
+
+void MainWindow::onUpdateDownloaded(UpdateResult* r) {
+    updateBusy_ = false;
+
+    if (!r->found) {
+        logUi(std::wstring(str::kUpdateFailPre) + widen(r->err));
+        MessageBoxW(hwnd_, (std::wstring(str::kUpdateFailPre) + widen(r->err)).c_str(),
+                    str::kAppName, MB_ICONWARNING | MB_OK);
+        return;
+    }
+    logUi(L"update: downloaded " + r->localPath);
+
+    // The installer replaces uxplay.exe as well, so the child has to go first - and it is
+    // ours to stop, not the installer's to kill.
+    doStop();
+
+    // /SILENT: the user already answered the question, a wizard would only ask it again.
+    // installer/airplay.iss starts us back up when it is done.
+    const HINSTANCE rc = ShellExecuteW(hwnd_, nullptr, r->localPath.c_str(),
+                                       L"/SILENT /SUPPRESSMSGBOXES /NOCANCEL",
+                                       nullptr, SW_SHOWNORMAL);
+    if (reinterpret_cast<INT_PTR>(rc) <= 32) {
+        logUi(L"update: could not start the installer");
+        MessageBoxW(hwnd_, str::kUpdateFailPre, str::kAppName, MB_ICONWARNING | MB_OK);
+        return;
+    }
+    doExit();
+}
+
 int MainWindow::chromeHeight() const {
     RECT r{0, 0, 100, 100};
     AdjustWindowRectEx(&r, WS_OVERLAPPEDWINDOW, FALSE, 0);
@@ -852,6 +1008,9 @@ void MainWindow::onCommand(int id, int code) {
         case kTrayExit:
             doExit();
             break;
+        case kTrayUpdate:
+            startUpdateCheck(true);
+            break;
         default:
             (void)code;
             break;
@@ -875,6 +1034,7 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
 
             log_.open();
             log_.setListBox(listLog_);
+            logUi(L"airplay " AIRPLAY_VERSION_WSTR);
             logUi(L"config: " + store_.path());
             logUi(L"log: " + log_.path());
             logUi(cfg_.uxplayPath.empty() ? std::wstring(L"uxplay.exe: NOT FOUND")
@@ -897,6 +1057,10 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
 
             tray_.add(hwnd_, WM_TRAY);
 
+            // Not from here: the check can come back before the window is even on screen, and
+            // its answer is a message box. A few seconds in, the user has seen the app first.
+            if (cfg_.autoUpdate) SetTimer(hwnd_, kUpdateTimer, 4000, nullptr);
+
             // The reader thread is not allowed to touch HWNDs; hand the event over by post.
             HWND target = hwnd_;
             host_.setCallback([target](const airplay::HostEvent& e) {
@@ -908,6 +1072,26 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
             applyAlwaysOnTop();
             updateStatus();
             updateButtons();
+            return 0;
+        }
+
+        case WM_TIMER:
+            // One shot: the startup update check, once the window is up.
+            if (wp == kUpdateTimer) {
+                KillTimer(hwnd_, kUpdateTimer);
+                startUpdateCheck(false);
+            }
+            return 0;
+
+        case WM_UPDATE_CHECKED: {
+            auto* r = reinterpret_cast<UpdateResult*>(lp);
+            if (r) { onUpdateChecked(r); delete r; }
+            return 0;
+        }
+
+        case WM_UPDATE_DOWNLOADED: {
+            auto* r = reinterpret_cast<UpdateResult*>(lp);
+            if (r) { onUpdateDownloaded(r); delete r; }
             return 0;
         }
 
