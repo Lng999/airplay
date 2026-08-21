@@ -4,6 +4,8 @@
 
 #include <cstring>
 
+#include "strings.h"
+
 namespace ui {
 namespace {
 
@@ -63,12 +65,12 @@ int Tray::trackMenu(HWND owner, bool running) const {
     HMENU menu = CreatePopupMenu();
     if (!menu) return kTrayNone;
 
-    AppendMenuW(menu, MF_STRING, kTrayShow,  L"&Show");
+    AppendMenuW(menu, MF_STRING, kTrayShow, str::kTrayShow);
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(menu, MF_STRING | (running ? MF_GRAYED : 0), kTrayStart, L"S&tart");
-    AppendMenuW(menu, MF_STRING | (running ? 0 : MF_GRAYED), kTrayStop,  L"St&op");
+    AppendMenuW(menu, MF_STRING | (running ? MF_GRAYED : 0), kTrayStart, str::kTrayStart);
+    AppendMenuW(menu, MF_STRING | (running ? 0 : MF_GRAYED), kTrayStop, str::kTrayStop);
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(menu, MF_STRING, kTrayExit, L"E&xit");
+    AppendMenuW(menu, MF_STRING, kTrayExit, str::kTrayExit);
     SetMenuDefaultItem(menu, kTrayShow, FALSE);
 
     POINT pt{};
