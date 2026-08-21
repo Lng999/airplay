@@ -9,13 +9,14 @@
 #include <vector>
 
 #include "single_instance.h"
+#include "strings.h"
 
 namespace ui {
 namespace {
 
 enum : int {
     IDC_STATUS = 1001,
-    IDC_RESOLUTION,
+    IDC_HINT,
     IDC_LBL_NAME,
     IDC_EDIT_NAME,
     IDC_LBL_PORT,
@@ -231,11 +232,8 @@ void MainWindow::createControls() {
                                nullptr);
     };
 
-    status_     = mk(L"STATIC", L"Stopped", SS_LEFT | SS_ENDELLIPSIS, IDC_STATUS);
-    resolution_ = CreateWindowExW(0, L"STATIC", L"", WS_CHILD | SS_LEFT | SS_ENDELLIPSIS, 0, 0,
-                                  10, 10, hwnd_,
-                                  reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_RESOLUTION)),
-                                  hinst_, nullptr);
+    status_ = mk(L"STATIC", str::kStateStopped, SS_LEFT | SS_ENDELLIPSIS, IDC_STATUS);
+    hint_   = mk(L"STATIC", str::kHintStopped, SS_LEFT | SS_ENDELLIPSIS, IDC_HINT);
 
     lblName_  = mk(L"STATIC", L"Name", SS_LEFT, IDC_LBL_NAME);
     editName_ = mk(L"EDIT", L"", ES_AUTOHSCROLL | WS_TABSTOP, IDC_EDIT_NAME, WS_EX_CLIENTEDGE);
@@ -273,7 +271,7 @@ void MainWindow::createControls() {
                                reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_LIST_LOG)),
                                hinst_, nullptr);
 
-    HWND all[] = {status_,     resolution_,     lblName_,       editName_,      lblPort_,
+    HWND all[] = {status_,     hint_,           lblName_,       editName_,      lblPort_,
                   editPort_,   lblVideo_,       cmbVideo_,      lblAudio_,      cmbAudio_,
                   chkFullscreen_, chkH265_,     chkDebug_,      chkAlwaysOnTop_, chkAutostart_,
                   btnStart_,   btnStop_,        btnCopy_,       listLog_};
@@ -296,7 +294,7 @@ void MainWindow::layout() {
     };
 
     place(status_, m, s(10), contentW, s(30));
-    place(resolution_, m, s(42), contentW, s(18));
+    place(hint_, m, s(42), contentW, s(18));
 
     int y = s(66);
     place(lblName_, m, y + s(5), s(44), s(16));
@@ -378,32 +376,40 @@ void MainWindow::configFromControls() {
 void MainWindow::logUi(const std::wstring& line) { log_.appendW(L"[gui] " + line); }
 
 void MainWindow::updateStatus() {
-    std::wstring text;
+    std::wstring text, hint;
     switch (state_) {
         case airplay::HostState::Stopped:
-            text = L"Stopped";
+            text = str::kStateStopped;
+            hint = str::kHintStopped;
             break;
         case airplay::HostState::Starting:
-            text = L"Starting…";
+            text = str::kStateStarting;
             break;
         case airplay::HostState::Waiting:
-            text = L"Waiting — " + cfg_.name;
-            if (!ipv4_.empty()) text += L" @ " + ipv4_;
+            text = str::kStateWaiting;
+            hint = std::wstring(str::kHintWaitingPre) + cfg_.name;
+            if (!ipv4_.empty()) hint += L" (" + ipv4_ + L")";
             break;
         case airplay::HostState::Connected:
-            text = L"Connected — " + (clientName_.empty() ? L"client" : clientName_);
-            if (!clientModel_.empty()) text += L" (" + clientModel_ + L")";
+            text = str::kStateConnected;
+            hint = clientName_.empty() ? std::wstring(str::kHintUnknownClient) : clientName_;
+            if (!clientModel_.empty()) hint += L" (" + clientModel_ + L")";
+            if (!resolutionText_.empty()) hint += L" · " + resolutionText_;
             break;
         case airplay::HostState::Stopping:
-            text = L"Stopping…";
+            text = str::kStateStopping;
             break;
         case airplay::HostState::Error:
-            text = L"Error: " + (lastError_.empty() ? L"unknown" : lastError_);
+            text = str::kStateError;
+            hint = lastError_.empty() ? std::wstring(str::kHintUnknownError) : lastError_;
             break;
     }
     SetWindowTextW(status_, text.c_str());
-    tray_.setTip(L"airplay — " + text);
-    SetWindowTextW(hwnd_, (L"airplay — " + text).c_str());
+    SetWindowTextW(hint_, hint.c_str());
+
+    const std::wstring title = std::wstring(str::kAppName) + str::kTitleSep + text;
+    tray_.setTip(title);
+    SetWindowTextW(hwnd_, title.c_str());
 }
 
 void MainWindow::updateButtons() {
@@ -461,8 +467,7 @@ void MainWindow::doStart() {
     ensureDir(hc.homeDir);
     ensureDir(localAppDir());
 
-    haveResolution_ = false;
-    ShowWindow(resolution_, SW_HIDE);
+    resolutionText_.clear();
     clientName_.clear();
     clientModel_.clear();
     lastError_.clear();
@@ -549,8 +554,7 @@ void MainWindow::onHostEvent(const airplay::HostEvent& ev) {
             if (state_ == airplay::HostState::Stopped) {
                 clientName_.clear();
                 clientModel_.clear();
-                haveResolution_ = false;
-                ShowWindow(resolution_, SW_HIDE);
+                resolutionText_.clear();
             }
             updateStatus();
             updateButtons();
@@ -573,14 +577,15 @@ void MainWindow::onHostEvent(const airplay::HostEvent& ev) {
         }
 
         case K::Resolution: {
-            wchar_t b[160];
-            _snwprintf(b, 160, L"Resolution: %dx%d (source) → %dx%d", ev.srcWidth,
+            // Only ever seen with debug=true; it becomes a suffix on the hint line.
+            wchar_t b[64];
+            _snwprintf(b, 64, L"%d×%d", ev.width, ev.height);
+            resolutionText_ = b;
+            wchar_t note[160];
+            _snwprintf(note, 160, L"resolution: %dx%d (source) -> %dx%d", ev.srcWidth,
                        ev.srcHeight, ev.width, ev.height);
-            SetWindowTextW(resolution_, b);
-            if (!haveResolution_) {
-                haveResolution_ = true;
-                ShowWindow(resolution_, SW_SHOW);
-            }
+            logUi(note);
+            updateStatus();
             break;
         }
 
@@ -735,7 +740,7 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
         case WM_DPICHANGED: {
             dpi_ = static_cast<int>(HIWORD(wp));
             createFonts();
-            for (HWND h : {status_, resolution_, lblName_, editName_, lblPort_, editPort_,
+            for (HWND h : {status_, hint_, lblName_, editName_, lblPort_, editPort_,
                            lblVideo_, cmbVideo_, lblAudio_, cmbAudio_, chkFullscreen_,
                            chkH265_, chkDebug_, chkAlwaysOnTop_, chkAutostart_, btnStart_,
                            btnStop_, btnCopy_, listLog_})

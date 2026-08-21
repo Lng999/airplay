@@ -61,7 +61,7 @@ private:
     AppConfig&   cfg_;
 
     HWND hwnd_ = nullptr;
-    HWND status_ = nullptr, resolution_ = nullptr;
+    HWND status_ = nullptr, hint_ = nullptr;
     HWND lblName_ = nullptr, editName_ = nullptr;
     HWND lblPort_ = nullptr, editPort_ = nullptr;
     HWND lblVideo_ = nullptr, cmbVideo_ = nullptr;
@@ -80,7 +80,7 @@ private:
 
     airplay::HostState state_ = airplay::HostState::Stopped;
     std::wstring clientName_, clientModel_, lastError_, ipv4_;
-    bool  haveResolution_ = false;
+    std::wstring resolutionText_;   // "1920x1080", only ever filled when debug=true
     bool  exiting_        = false;
     UINT  taskbarCreated_ = 0;
 };
