@@ -956,6 +956,10 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
             logUi(L"log: " + log_.path());
             logUi(cfg_.uxplayPath.empty() ? std::wstring(L"uxplay.exe: NOT FOUND")
                                           : L"uxplay.exe: " + cfg_.uxplayPath);
+            // Which ucrt64\ tree the child will load its DLLs and GStreamer plugins from -
+            // the first thing to look at when a copied-to-another-machine install misbehaves.
+            logUi(cfg_.msysRoot.empty() ? std::wstring(L"runtime: NOT FOUND")
+                                        : L"runtime: " + cfg_.msysRoot);
 
             controlsFromConfig();
             showAdvanced_ = cfg_.showAdvanced;
