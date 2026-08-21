@@ -81,6 +81,18 @@ startup, so a change needs a restart.
 The status dot: grey idle, amber starting/stopping, blue advertising, green mirroring,
 red error.
 
+### Sleeping phone
+
+Locking the iPhone does **not** end an AirPlay session: it only stops the client from
+requesting feedback, so the last frame would hang on screen forever. The GUI treats that as
+a stall — status `Duraklatıldı`, amber dot — and **hides the child's video window** until the
+lines stop arriving (2.5 s of silence at 1 Hz, `uxplay.cpp:535-556`), then shows it again
+with `SW_SHOWNA` so the returning picture does not steal focus. Nothing is required from the
+user in either direction. `[app] hide_when_stalled=0` turns it off.
+
+This is also why **Bağlantı zaman aşımı defaults to off**: with UxPlay's own 15 s limit the
+session was declared lost while the phone was just asleep.
+
 - **Close button hides to the notification area.** A balloon says so the first time
   (`[app] tray_hint_shown`). The tray menu (right click) has Göster / Başlat / Durdur /
   Çıkış; only **Çıkış** really quits, and it stops the child first.
@@ -109,6 +121,9 @@ audio_sink=autoaudiosink
 fullscreen=0
 h265=0
 debug=0             ; -d; verbose, and the only way to get resolution numbers
+reset=0             ; -reset n; how long the client may stay silent. 0 = never give up.
+                    ; A locked iPhone is silent, so any limit ends the session while the
+                    ; phone is merely asleep.
 max_fps=60          ; -fps n; the maxFPS plist item the client obeys. UxPlay's own default
                     ; is 30 (lib/raop.c:623) and is the main reason mirroring can look choppy.
                     ; 0 = omit -fps and take that default.
@@ -117,7 +132,6 @@ video_decoder=      ; -vd; empty = "decodebin", which picks by GStreamer rank. O
                     ; cross the D3D12/D3D11 boundary; d3d11h264dec keeps one API.
 fps_data=0          ; -FPSdata; the client's streaming performance reports (XML) into the log
 nohold=1
-reset=15            ; -reset N, 0 disables the missed-feedback timeout
 
 [app]
 always_on_top=0
@@ -126,6 +140,7 @@ autostart_receiver=0
 show_advanced=0     ; collapsible sections, written the moment they are toggled
 show_details=0
 tray_hint_shown=0   ; the one-shot "still running in the tray" balloon
+hide_when_stalled=1 ; hide the frozen video window while the phone's screen is off
 msys_root=C:\msys64
 uxplay_path=
 

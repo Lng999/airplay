@@ -10,6 +10,10 @@ Her satır: `[ ]` bekliyor · `[x] YYYY-MM-DD` doğrulandı · `[!]` başarısı
 - [x] 2026-08-21 Ses geldi (kullanıcı raporu)
 - [ ] Döndürme (portrait↔landscape) düzgün
 - [ ] iPhone'dan "Yansıtmayı Durdur" → uxplay temiz şekilde beklemeye dönüyor, tekrar bağlanabiliyor
+- [ ] **Telefon uykusu:** yansıtma sürerken yan tuşla ekranı kapat → PC'deki görüntü ~3 sn
+      içinde kayboluyor, durum "Duraklatıldı" (turuncu nokta); telefonu aç → görüntü
+      kendiliğinden geri geliyor ve odak çalınmıyor
+- [ ] Telefonu 1 dakikadan uzun kapalı tut → açınca yine geri geliyor (zaman aşımı Kapalı)
 - [ ] Gecikme kabul edilebilir (ms tahmini not edilsin)
 - [ ] **Akıcılık:** 30 FPS ile 60 FPS arasında gözle görülür fark var mı? (Gelişmiş →
       Akıcılık; değişiklik Durdur/Başlat gerektirir). `-fps` iPhone'a `maxFPS` olarak
