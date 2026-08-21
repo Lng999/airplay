@@ -410,7 +410,7 @@ void testBuildArgsDefault() {
     std::string s = narrowAscii(joinArgs(UxplayHost::buildArgs(baseConfig())));
     CHECK_STR(s,
               "C:\\airplay\\build\\uxplay.exe -n AirPlay-PC -nh -p 7100 "
-              "-vs d3d11videosink -as autoaudiosink -nohold -reset 15");
+              "-vs d3d11videosink -as autoaudiosink -nohold -fps 60 -reset 15");
 }
 
 void testBuildArgsBarePort() {
@@ -436,7 +436,25 @@ void testBuildArgsFlags() {
     std::string s = narrowAscii(joinArgs(UxplayHost::buildArgs(c)));
     CHECK_STR(s,
               "C:\\airplay\\build\\uxplay.exe -n AirPlay-PC -nh -p 7100 "
-              "-vs d3d12videosink -as wasapi2sink -fs -h265 -d -reset 0");
+              "-vs d3d12videosink -as wasapi2sink -fs -h265 -d -fps 60 -reset 0");
+}
+
+// -fps / -vd / -FPSdata: the smoothness levers. maxFps 0 must omit -fps entirely so the
+// library default (30, lib/raop.c:623) applies.
+void testBuildArgsSmoothness() {
+    beginTest("buildArgs fps/decoder");
+    HostConfig c = baseConfig();
+    c.maxFps = 0;
+    std::string s = narrowAscii(joinArgs(UxplayHost::buildArgs(c)));
+    CHECK(s.find("-fps") == std::string::npos);
+
+    c.maxFps = 30;
+    c.videoDecoder = "d3d11h264dec";
+    c.fpsData = true;
+    s = narrowAscii(joinArgs(UxplayHost::buildArgs(c)));
+    CHECK(s.find(" -fps 30 ") != std::string::npos);
+    CHECK(s.find(" -vd d3d11h264dec ") != std::string::npos);
+    CHECK(s.find(" -FPSdata") != std::string::npos);
 }
 
 void testBuildArgsExtrasLast() {
@@ -444,8 +462,9 @@ void testBuildArgsExtrasLast() {
     HostConfig c = baseConfig();
     c.extraArgs = {"-m", "aa:bb:cc:dd:ee:ff"};
     std::vector<std::wstring> a = UxplayHost::buildArgs(c);
-    // 13 fixed elements (exe -n name -nh -p 7100 -vs .. -as .. -nohold -reset 15) + 2 extras
-    CHECK_INT(static_cast<long long>(a.size()), 15);
+    // 15 fixed elements (exe -n name -nh -p 7100 -vs .. -as .. -nohold -fps 60 -reset 15)
+    // + 2 extras
+    CHECK_INT(static_cast<long long>(a.size()), 17);
     CHECK(a[a.size() - 2] == L"-m");
     CHECK(a[a.size() - 1] == L"aa:bb:cc:dd:ee:ff");
 }
@@ -487,6 +506,7 @@ int main() {
     testBuildArgsDefault();
     testBuildArgsBarePort();
     testBuildArgsFlags();
+    testBuildArgsSmoothness();
     testBuildArgsExtrasLast();
     testBuildArgsNameWithSpaces();
 

@@ -278,6 +278,15 @@ std::vector<std::wstring> UxplayHost::buildArgs(const HostConfig& cfg) {
     if (cfg.h265)       a.push_back(L"-h265");                   // uxplay.cpp:1751
     if (cfg.debug)      a.push_back(L"-d");                      // uxplay.cpp:1369
     if (cfg.noHold)     a.push_back(L"-nohold");                 // uxplay.cpp:1597
+    if (cfg.maxFps > 0) {                                        // uxplay.cpp:1313-1320
+        a.push_back(L"-fps");
+        a.push_back(std::to_wstring(cfg.maxFps));
+    }
+    if (!cfg.videoDecoder.empty()) {                             // uxplay.cpp:1393-1396
+        a.push_back(L"-vd");
+        a.push_back(widen(cfg.videoDecoder));
+    }
+    if (cfg.fpsData)    a.push_back(L"-FPSdata");                // uxplay.cpp:1451
     a.push_back(L"-reset"); a.push_back(std::to_wstring(cfg.resetSeconds));  // uxplay.cpp:1452
     for (const std::string& extra : cfg.extraArgs) a.push_back(widen(extra));
     return a;

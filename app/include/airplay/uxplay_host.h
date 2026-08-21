@@ -56,6 +56,16 @@ struct HostConfig {
     bool fullscreen{false};          // -fs
     bool h265{false};                // -h265
     bool debug{false};               // -d  (required for Resolution events; re-enables stdout buffering!)
+    // Frame rate ceiling advertised to the client as the "maxFPS" plist item
+    // (uxplay.cpp:1313-1320 -> :2752). UxPlay's own default is 30 (lib/raop.c:623), which the
+    // iPhone obeys - it is the single biggest lever on how smooth mirroring looks.
+    // 0 = do not pass -fps, i.e. leave the library default.
+    int  maxFps{60};
+    // -vd <element>: the GStreamer decoder. Empty = UxPlay's "decodebin" (uxplay.cpp:123),
+    // which picks by rank and on this machine lands on d3d12h264dec (258) while the sink is
+    // d3d11videosink - every frame then crosses the D3D12/D3D11 boundary.
+    std::string videoDecoder;
+    bool fpsData{false};             // -FPSdata: client performance reports (XML) into the log
     bool noHold{true};               // -nohold (new client may take over)
     int  resetSeconds{15};           // -reset <n>; 0 disables
     std::vector<std::string> extraArgs; // passed through verbatim, last
