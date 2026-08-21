@@ -30,8 +30,7 @@ enum : int {
     IDC_CHK_DEBUG,
     IDC_CHK_ALWAYSONTOP,
     IDC_CHK_AUTOSTART,
-    IDC_BTN_START,
-    IDC_BTN_STOP,
+    IDC_BTN_TOGGLE,
     IDC_BTN_COPY,
     IDC_LIST_LOG
 };
@@ -260,9 +259,8 @@ void MainWindow::createControls() {
     chkAutostart_   = mk(L"BUTTON", L"Start receiver on launch", BS_AUTOCHECKBOX | WS_TABSTOP,
                          IDC_CHK_AUTOSTART);
 
-    btnStart_ = mk(L"BUTTON", L"Start", BS_DEFPUSHBUTTON | WS_TABSTOP, IDC_BTN_START);
-    btnStop_  = mk(L"BUTTON", L"Stop", BS_PUSHBUTTON | WS_TABSTOP, IDC_BTN_STOP);
-    btnCopy_  = mk(L"BUTTON", L"Copy cmdline", BS_PUSHBUTTON | WS_TABSTOP, IDC_BTN_COPY);
+    btnToggle_ = mk(L"BUTTON", str::kBtnStart, BS_DEFPUSHBUTTON | WS_TABSTOP, IDC_BTN_TOGGLE);
+    btnCopy_   = mk(L"BUTTON", str::kBtnCopyCmd, BS_PUSHBUTTON | WS_TABSTOP, IDC_BTN_COPY);
 
     listLog_ = CreateWindowExW(WS_EX_CLIENTEDGE, L"LISTBOX", L"",
                                kChild | WS_VSCROLL | WS_HSCROLL | WS_TABSTOP | LBS_NOSEL |
@@ -274,7 +272,7 @@ void MainWindow::createControls() {
     HWND all[] = {status_,     hint_,           lblName_,       editName_,      lblPort_,
                   editPort_,   lblVideo_,       cmbVideo_,      lblAudio_,      cmbAudio_,
                   chkFullscreen_, chkH265_,     chkDebug_,      chkAlwaysOnTop_, chkAutostart_,
-                  btnStart_,   btnStop_,        btnCopy_,       listLog_};
+                  btnToggle_,  btnCopy_,        listLog_};
     for (HWND h : all)
         if (h) SendMessageW(h, WM_SETFONT, reinterpret_cast<WPARAM>(fontUi_), TRUE);
     if (status_) SendMessageW(status_, WM_SETFONT, reinterpret_cast<WPARAM>(fontStatus_), TRUE);
@@ -318,9 +316,8 @@ void MainWindow::layout() {
     place(chkAutostart_, m + s(120), y, s(200), s(20));
 
     y = s(180);
-    place(btnStart_, m, y, s(88), s(28));
-    place(btnStop_, m + s(94), y, s(88), s(28));
-    place(btnCopy_, m + s(188), y, s(120), s(28));
+    place(btnToggle_, m, y, s(150), s(30));
+    place(btnCopy_, m + s(158), y, s(130), s(30));
 
     const int listTop = s(216);
     int listH = H - listTop - m;
@@ -415,8 +412,11 @@ void MainWindow::updateStatus() {
 void MainWindow::updateButtons() {
     const bool running = state_ != airplay::HostState::Stopped &&
                          state_ != airplay::HostState::Error;
-    EnableWindow(btnStart_, !running);
-    EnableWindow(btnStop_, running);
+    SetWindowTextW(btnToggle_, running ? str::kBtnStop : str::kBtnStart);
+    // Starting/Stopping are transient: the button would act on a state that is about to
+    // change, so it stays disabled until the child has settled.
+    EnableWindow(btnToggle_, state_ != airplay::HostState::Starting &&
+                                 state_ != airplay::HostState::Stopping);
     // Receiver settings only take effect on (re)start - see DESIGN 6.1 limitations.
     const BOOL editable = running ? FALSE : TRUE;
     for (HWND h : {editName_, editPort_, cmbVideo_, cmbAudio_, chkFullscreen_, chkH265_,
@@ -609,11 +609,11 @@ void MainWindow::onHostEvent(const airplay::HostEvent& ev) {
 
 void MainWindow::onCommand(int id, int code) {
     switch (id) {
-        case IDC_BTN_START:
-            doStart();
-            break;
-        case IDC_BTN_STOP:
-            doStop();
+        case IDC_BTN_TOGGLE:
+            if (host_.isRunning())
+                doStop();
+            else
+                doStart();
             break;
         case IDC_BTN_COPY:
             doCopyCmdline();
@@ -742,8 +742,8 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
             createFonts();
             for (HWND h : {status_, hint_, lblName_, editName_, lblPort_, editPort_,
                            lblVideo_, cmbVideo_, lblAudio_, cmbAudio_, chkFullscreen_,
-                           chkH265_, chkDebug_, chkAlwaysOnTop_, chkAutostart_, btnStart_,
-                           btnStop_, btnCopy_, listLog_})
+                           chkH265_, chkDebug_, chkAlwaysOnTop_, chkAutostart_,
+                           btnToggle_, btnCopy_, listLog_})
                 if (h) SendMessageW(h, WM_SETFONT, reinterpret_cast<WPARAM>(fontUi_), TRUE);
             if (status_)
                 SendMessageW(status_, WM_SETFONT, reinterpret_cast<WPARAM>(fontStatus_), TRUE);

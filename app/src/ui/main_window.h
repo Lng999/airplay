@@ -68,7 +68,7 @@ private:
     HWND lblAudio_ = nullptr, cmbAudio_ = nullptr;
     HWND chkFullscreen_ = nullptr, chkH265_ = nullptr, chkDebug_ = nullptr;
     HWND chkAlwaysOnTop_ = nullptr, chkAutostart_ = nullptr;
-    HWND btnStart_ = nullptr, btnStop_ = nullptr, btnCopy_ = nullptr;
+    HWND btnToggle_ = nullptr, btnCopy_ = nullptr;   // one button: Start <-> Stop
     HWND listLog_ = nullptr;
 
     HFONT fontUi_ = nullptr, fontStatus_ = nullptr;
