@@ -92,7 +92,7 @@ private:
     HWND lblReset_ = nullptr, cmbReset_ = nullptr;
     HWND chkFullscreen_ = nullptr, chkH265_ = nullptr, chkDebug_ = nullptr;
     HWND chkAlwaysOnTop_ = nullptr, chkAutostart_ = nullptr;
-    HWND chkEmbed_ = nullptr, chkLogon_ = nullptr;
+    HWND chkEmbed_ = nullptr, chkLogon_ = nullptr, chkFrame_ = nullptr;
     HWND btnToggle_ = nullptr, btnCopy_ = nullptr;   // one button: Start <-> Stop
     HWND secAdvanced_ = nullptr, secDetails_ = nullptr;   // collapsible section headers
     HWND listLog_ = nullptr;

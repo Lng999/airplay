@@ -11,6 +11,7 @@
 
 #include "../res/resource.h"
 #include "autostart.h"
+#include "device_frames.h"
 #include "single_instance.h"
 #include "stale_receivers.h"
 #include "strings.h"
@@ -56,6 +57,7 @@ enum : int {
     IDC_CHK_AUTOSTART,
     IDC_CHK_EMBED,
     IDC_CHK_LOGON,
+    IDC_CHK_FRAME,
     IDC_BTN_TOGGLE,
     IDC_BTN_COPY,
     IDC_SEC_ADVANCED,
@@ -156,6 +158,16 @@ bool copyToClipboard(HWND owner, const std::wstring& text) {
 } // namespace
 
 // ---------------------------------------------------------------------------
+
+// The marketing name for a model identifier, or "" when the table has never heard of it.
+const std::wstring& deviceDisplayName(const std::wstring& model) {
+    static const std::wstring empty;
+    static std::wstring cached, cachedFor;
+    if (model == cachedFor) return cached;
+    cachedFor = model;
+    cached = isKnownDevice(model) ? lookupDevice(model).name : L"";
+    return cached.empty() ? empty : cached;
+}
 
 std::wstring firstLocalIPv4() {
     ULONG size = 16 * 1024;
@@ -339,6 +351,8 @@ void MainWindow::createControls() {
                          IDC_CHK_EMBED);
     chkLogon_       = mk(L"BUTTON", str::kChkLogon, BS_AUTOCHECKBOX | WS_TABSTOP,
                          IDC_CHK_LOGON);
+    chkFrame_       = mk(L"BUTTON", str::kChkFrame, BS_AUTOCHECKBOX | WS_TABSTOP,
+                         IDC_CHK_FRAME);
 
     btnToggle_ = mk(L"BUTTON", str::kBtnStart, BS_DEFPUSHBUTTON | WS_TABSTOP, IDC_BTN_TOGGLE);
     btnCopy_   = mk(L"BUTTON", str::kBtnCopyCmd, BS_PUSHBUTTON | WS_TABSTOP, IDC_BTN_COPY);
@@ -361,7 +375,7 @@ void MainWindow::createControls() {
     HWND all[] = {status_,     hint_,           lblName_,       editName_,      lblPort_,
                   editPort_,   lblVideo_,       cmbVideo_,      lblAudio_,      cmbAudio_,
                   chkFullscreen_, chkH265_,     chkDebug_,      chkAlwaysOnTop_, chkAutostart_,
-                  chkEmbed_,   chkLogon_,
+                  chkEmbed_,   chkLogon_,      chkFrame_,
                   lblFps_,     cmbFps_,         lblDecoder_,    cmbDecoder_,
                   lblReset_,   cmbReset_,
                   btnToggle_,  btnCopy_,        secAdvanced_,   secDetails_,    listLog_};
@@ -430,6 +444,8 @@ void MainWindow::layout() {
         y += s(24);
         place(chkEmbed_, m, y, s(210), s(20));
         place(chkLogon_, m + s(216), y, s(210), s(20));
+        y += s(24);
+        place(chkFrame_, m, y, s(210), s(20));
         y += s(28);
         place(btnCopy_, m, y, s(140), s(28));
         y += s(36);
@@ -453,7 +469,7 @@ void MainWindow::applySectionVisibility() {
     for (HWND h : {lblPort_, editPort_, lblFps_, cmbFps_, lblVideo_, cmbVideo_, lblDecoder_,
                    cmbDecoder_, lblAudio_, cmbAudio_, lblReset_, cmbReset_, chkFullscreen_,
                    chkH265_, chkDebug_, chkAlwaysOnTop_, chkAutostart_, chkEmbed_,
-                   chkLogon_, btnCopy_})
+                   chkLogon_, chkFrame_, btnCopy_})
         if (h) ShowWindow(h, adv);
     if (listLog_) ShowWindow(listLog_, showDetails_ ? SW_SHOW : SW_HIDE);
 
@@ -664,6 +680,7 @@ void MainWindow::controlsFromConfig() {
     setChecked(chkAlwaysOnTop_, cfg_.alwaysOnTop);
     setChecked(chkAutostart_, cfg_.autostartReceiver);
     setChecked(chkEmbed_, cfg_.embedVideo);
+    setChecked(chkFrame_, cfg_.deviceFrame);
     // Not a config.ini value: the registry (and the installer's Startup shortcut) own it.
     setChecked(chkLogon_, isLaunchAtLogon());
 }
@@ -698,6 +715,7 @@ void MainWindow::configFromControls() {
     cfg_.alwaysOnTop       = isChecked(chkAlwaysOnTop_);
     cfg_.autostartReceiver = isChecked(chkAutostart_);
     cfg_.embedVideo        = isChecked(chkEmbed_);
+    cfg_.deviceFrame       = isChecked(chkFrame_);
 }
 
 // ---------------------------------------------------------------------------
@@ -722,7 +740,12 @@ void MainWindow::updateStatus() {
         case airplay::HostState::Connected:
             text = str::kStateConnected;
             hint = clientName_.empty() ? std::wstring(str::kHintUnknownClient) : clientName_;
-            if (!clientModel_.empty()) hint += L" (" + clientModel_ + L")";
+            if (!clientModel_.empty()) {
+                // "iPhone 13" reads better than "iPhone14,5"; fall back to the identifier
+                // for a model the table does not know rather than inventing a name.
+                const std::wstring& named = deviceDisplayName(clientModel_);
+                hint += L" (" + (named.empty() ? clientModel_ : named) + L")";
+            }
             if (!resolutionText_.empty()) hint += L" · " + resolutionText_;
             if (currentKbps_ > 0) {
                 wchar_t br[32];
@@ -1001,11 +1024,19 @@ void MainWindow::onHostEvent(const airplay::HostEvent& ev) {
             break;
         }
 
-        case K::ClientInfo:
+        case K::ClientInfo: {
             clientName_  = widen(ev.clientName);
             clientModel_ = widen(ev.clientModel);
+            // The model identifier is what picks the frame - and its notch. It arrives
+            // before the video window exists, which is the right order: by the time there
+            // is a picture to frame, the phone is known.
+            video_.setDevice(clientModel_);
+            const std::wstring& named = deviceDisplayName(clientModel_);
+            logUi(named.empty() ? L"client model: " + clientModel_ + L" (not in the frame table)"
+                                : L"client model: " + clientModel_ + L" = " + named);
             updateStatus();
             break;
+        }
 
         case K::Ports: {
             wchar_t b[160];
@@ -1106,6 +1137,11 @@ void MainWindow::onCommand(int id, int code) {
         case IDC_CHK_EMBED:
             cfg_.embedVideo = isChecked(chkEmbed_);
             applyEmbedSetting();
+            store_.save(cfg_);
+            break;
+        case IDC_CHK_FRAME:
+            // setFrameEnabled owns cfg_.deviceFrame and re-lays out the picture at once.
+            video_.setFrameEnabled(isChecked(chkFrame_));
             store_.save(cfg_);
             break;
         case IDC_CHK_LOGON: {
