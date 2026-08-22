@@ -1,0 +1,79 @@
+diff --git a/uxplay.cpp b/uxplay.cpp
+index e2aa610..c5ae60f 100644
+--- a/uxplay.cpp
++++ b/uxplay.cpp
+@@ -564,6 +564,48 @@ static gboolean mirror_activity_callback(gpointer loop) {
+     return TRUE;
+ }
+ 
++/* --- video statistics --------------------------------------------------------------------
++ * How much video is actually arriving is not reported anywhere upstream: -FPSdata carries
++ * the client's own view of its frame rate, and nothing carries the bitrate at all.
++ * video_process() sees every frame, so counting bytes there and dividing by the elapsed
++ * time costs nothing and needs no client cooperation.
++ */
++static uint64_t video_bytes = 0;
++static uint64_t video_frames = 0;
++static uint64_t stats_last_time = 0;
++
++static gboolean video_stats_callback(gpointer loop) {
++    (void) loop;
++    uint64_t now = get_local_time();
++    if (!open_connections) {
++        video_bytes = 0;
++        video_frames = 0;
++        stats_last_time = 0;
++        return TRUE;
++    }
++    if (!stats_last_time) {
++        stats_last_time = now;
++        return TRUE;
++    }
++    uint64_t elapsed = now - stats_last_time;
++    if (elapsed < 500000000ULL) {    /* half a second, in case the timer fires early */
++        return TRUE;
++    }
++    stats_last_time = now;
++    uint64_t bytes = video_bytes;
++    uint64_t frames = video_frames;
++    video_bytes = 0;
++    video_frames = 0;
++    if (!frames) {
++        return TRUE;    /* screen off: mirror_activity_callback already says so */
++    }
++    double seconds = ((double) elapsed) / 1000000000.0;
++    unsigned kbps = (unsigned) (((double) bytes) * 8.0 / 1000.0 / seconds);
++    unsigned fps = (unsigned) (((double) frames) / seconds + 0.5);
++    LOGI("mirror stats: %u kbps %u fps", kbps, fps);
++    return TRUE;
++}
++
+ static gboolean feedback_callback(gpointer loop) {
+     if (open_connections) {
+         if (missed_feedback_limit && missed_feedback > missed_feedback_limit) {
+@@ -755,6 +797,8 @@ static void main_loop()  {
+     guint reset_watch_id = g_timeout_add(100, (GSourceFunc) reset_callback, (gpointer) loop);
+     guint mirror_activity_id = g_timeout_add(200, (GSourceFunc) mirror_activity_callback,
+                                              (gpointer) loop);
++    guint video_stats_id = g_timeout_add_seconds(1, (GSourceFunc) video_stats_callback,
++                                                 (gpointer) loop);
+ 
+ #ifdef _WIN32
+     gmainloop = loop;
+@@ -791,6 +835,7 @@ static void main_loop()  {
+     if (video_eos_watch_id > 0) g_source_remove(video_eos_watch_id);
+     if (feedback_watch_id > 0) g_source_remove(feedback_watch_id);
+     if (mirror_activity_id > 0) g_source_remove(mirror_activity_id);
++    if (video_stats_id > 0) g_source_remove(video_stats_id);
+     g_main_loop_unref(loop);
+ }    
+ 
+@@ -2372,6 +2417,8 @@ extern "C" void audio_process (void *cls, raop_ntp_t *ntp, audio_decode_struct *
+ 
+ extern "C" void video_process (void *cls, raop_ntp_t *ntp, video_decode_struct *data) {
+     last_video_frame_time = get_local_time();   /* read by mirror_activity_callback */
++    video_bytes += (uint64_t) data->data_len;   /* read by video_stats_callback */
++    video_frames++;
+     if (dump_video) {
+         dump_video_to_file(data->data, data->data_len);
+     }
