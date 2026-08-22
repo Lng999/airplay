@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(airplay_gui VERSION 0.3.0 LANGUAGES CXX)
+project(airplay_gui VERSION 0.4.0 LANGUAGES CXX)
 enable_language(RC)
 
 # The one place the version is written down. src/ui/version.h.in explains where it travels.
