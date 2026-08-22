@@ -37,6 +37,10 @@ enum class HostEventKind {
     // client's own once-a-second reports. srcWidth: 1 = frames flowing, 0 = idle.
     MirrorActivity,
     MirrorFps,
+    // patches/0005 measures the stream itself, once a second, inside the receiver: kbps and
+    // fps fields below. Unlike MirrorFps it needs nothing from the client - no -FPSdata - and
+    // it describes what actually arrived rather than what the phone believes it sent.
+    MirrorStats,
     Warning,         // "*** WARNING: ..." line
     Error            // "*** ERROR: ..." line (does not necessarily change state)
 };
@@ -51,6 +55,8 @@ struct HostEvent {
     int udpPorts[3]{0,0,0}, tcpPorts[3]{0,0,0};
     // Resolution (src = iPhone, plain = after scaling); source prints %f, values are rounded to int
     int srcWidth{0}, srcHeight{0}, width{0}, height{0};
+    // MirrorStats
+    int kbps{0}, fps{0};
 };
 
 struct HostConfig {
