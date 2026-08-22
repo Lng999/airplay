@@ -425,6 +425,27 @@ void testMirrorActivity() {
     if (b) CHECK_INT(b->srcWidth, 1);
 }
 
+// patches/0005 - the receiver's own measurement of the stream.
+void testMirrorStats() {
+    beginTest("mirror stats");
+    ParsedLine p = parseUxplayLineDetailed("mirror stats: 12480 kbps 59 fps");
+    CHECK_TAG(p, LineTag::MirrorStats);
+    const HostEvent* e = find(p.events, HostEventKind::MirrorStats);
+    CHECK(e != nullptr);
+    if (e) {
+        CHECK_INT(e->kbps, 12480);
+        CHECK_INT(e->fps, 59);
+    }
+    // The parser always emits the LogLine (contract); dropping one stats line a second from
+    // the log is UxplayHost's job, by tag - same as the -FPSdata envelope.
+    CHECK(find(p.events, HostEventKind::LogLine) != nullptr);
+
+    // A malformed line is still recognised, but carries no numbers to act on.
+    ParsedLine bad = parseUxplayLineDetailed("mirror stats: something else");
+    CHECK_TAG(bad, LineTag::MirrorStats);
+    CHECK(find(bad.events, HostEventKind::MirrorStats) == nullptr);
+}
+
 // unknown line -> LogLine only
 void testUnknown() {
     beginTest("unknown line");
@@ -556,6 +577,7 @@ int main() {
     testFeedbackLate();
     testPlistReport();
     testMirrorActivity();
+    testMirrorStats();
     testUnknown();
     testEolStripping();
     testBuildArgsDefault();
