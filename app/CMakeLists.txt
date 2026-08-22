@@ -49,6 +49,9 @@ add_executable(airplay-gui WIN32
     src/ui/tray.cpp
     src/ui/config_store.cpp
     src/ui/stale_receivers.cpp
+    src/ui/video_embed.cpp
+    src/ui/video_window.cpp
+    src/ui/autostart.cpp
     src/ui/single_instance.cpp
     src/ui/ui_log.cpp
     src/ui/updater.cpp
