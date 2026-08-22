@@ -54,17 +54,37 @@ iPhone 13 → **Windows 10 Pro 22H2** PC (ortam envanteri: Win11 değil; Ryzen 5
 ### Phase 2 — Windows uygulaması
 - [x] `app/` Win32 GUI **M1** (2026-08-20): durum (waiting/connected), cihaz adı, çözünürlük (sadece Debug ile); FPS/bitrate → M2. Canlı doğrulandı: Waiting @192.168.1.107, mDNS PASS, tray Exit child'ı da kapatıyor
 - [x] Config (`%APPDATA%irplay\config.ini`), start/stop, single-instance (named mutex), tray ikonu — M1
-- [ ] Video HWND embed, aspect-ratio korumalı resize → **M2** (`docs/PHASE2-SPEC.md`)
+- [x] **M2 (2026-08-22)**: görüntü artık kendi penceremizde — `docs/PHASE2-M2-SPEC.md`.
+      Yöntem değişti: `GstVideoOverlay` yerine **pencereyi evlat edinme** (`SetParent`).
+      Overlay süreç sınırında çalışmıyor (sink verilen HWND'yi subclass ediyor,
+      `SetWindowLongPtr(GWLP_WNDPROC)` başka sürecin penceresinde yasak); reparent çalışıyor
+      ve ölçüldü. Letterbox + oran kilitli boyutlandırma + F11 tam ekran + her zaman üstte.
+      Çözünürlük artık `-d` olmadan da biliniyor (evlat edinme anındaki istemci alanı).
+      `app/tests/test_embed_live.cpp` gerçek `d3d11videosink` ile 15 kontrol, yeşil.
+- [x] FPS/bitrate: `patches/0005` alıcının kendi ölçümünü saniyede bir basıyor
+      (`mirror stats: <kbps> kbps <fps> fps`), durum satırında `· 12.5 Mbps · 59 fps`
 
 ### Phase 3 — Cila + paket
-- [ ] Autostart (HKCU Run), ekran görüntüsü, log
-- [ ] Self-contained build + DLL listesi, opsiyonel installer
+- [x] Autostart: `Windows açılışında başlat` kutusu — HKCU `...\Run\airplay` =
+      `"<exe>" -minimized`; kapatılınca kurulumun bıraktığı Başlangıç kısayolu da siliniyor
+      (`app/src/ui/autostart.cpp`). İki mekanizma tek kutuyla yönetiliyor.
+- [x] Log: `%LOCALAPPDATA%\airplay\logs\gui.log` (5 MB'ta döndürülüyor) + Ayrıntılar listesi
+- [ ] ~~Ekran görüntüsü~~ **kapsam dışı**: kareler bu süreçte yok. Görüntü penceresi evlat
+      edinilmiş bir yabancı pencere; ekran görüntüsü ancak kendi `uxplay_core`'umuz olursa
+      mümkün (`app/README.md` "What is still out of reach").
+- [x] Self-contained build + DLL listesi + installer (v0.3.0: `scripts/make-portable.ps1`,
+      `installer/airplay.iss`, `scripts/publish-release.ps1`)
 
 ### Phase 0 sonrası bulunan upstream kusurları (patches/)
 - `0001` **[KAPANDI]** dahili mDNS A kaydı 127.0.0.1 ilan ediyordu (`mdnsd.c:348-373`, multicast hedefe connect+getsockname; bkz. docs/research/mdnsd-windows-rca.md). Yama: GetAdaptersAddresses ile default-gateway adaptörü. 2026-08-21 iPhone ile doğrulandı. Upstream'e PR adayı.
 - `0003` **[KAPANDI]** Windows'ta ASCII dışı `-n <ad>` kullanılamıyordu: `uxplay.exe` `-municode` olmadan derlendiği için `argv[]` ANSI kod sayfasından geliyor, `CreateProcessW` ile başlatan her çağıran (bizim GUI, cmd, PowerShell) `-n Salon Odası`'nı CP1254 bayt olarak teslim ediyor, `is_utf8()` reddedip `exit(0)` yapıyor (`uxplay.cpp:1204-1210`) — çağırana temiz kapanış gibi görünüyor. Yama gömülü manifest ile `activeCodePage=UTF-8` (Win10 1903+). 2026-08-21 doğrulandı. Upstream'e PR adayı (0001 ile birlikte).
 - `0004` Yansıtma duraklamasını hızlı bildirme: `video_process()` her karede çalıştığı için zaman damgası tutulup 200 ms'lik timer ile 400 ms kare gelmezse `mirror idle`, dönünce `mirror active` basılıyor. İstemcinin kendi `-FPSdata` raporu saniyede bir geldiğinden tek başına 2-3 sn gecikme veriyordu. Bize özel bir kanca; upstream PR adayı değil.
 - `0002` `CtrlHandler` CTRL_BREAK'i işlemiyor → GUI'den durdurunca `cleanup()` koşmuyor. Yama uygulandı (build.sh otomatik uyguluyor).
+- `0005` Bit hızı ve gerçek kare hızı upstream'de hiç raporlanmıyor. `video_process()` her
+  karede baytları topluyor, 1 sn'lik timer `mirror stats: <kbps> kbps <fps> fps` basıyor.
+  Bize özel kanca; upstream PR adayı değil. **Not:** 0005, 0004'ün bağlam satırlarını
+  değiştirdiği için `build.sh` artık "uygulanmış mı" tahmini yapmıyor — submodule'ü sıfırlayıp
+  tüm yamaları sırayla uyguluyor (`patches/README.md`).
 
 ## 4. Teslimatlar (bu geçiş)
 1. Phase 0 betikleri + BUILD-NOTES.md
