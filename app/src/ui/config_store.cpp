@@ -207,6 +207,7 @@ void ConfigStore::load(AppConfig& cfg) const {
     cfg.trayHintShown     = readBool(f, L"app", L"tray_hint_shown",    cfg.trayHintShown);
     cfg.autoUpdate        = readBool(f, L"app", L"auto_update",        cfg.autoUpdate);
     cfg.embedVideo        = readBool(f, L"app", L"embed_video",        cfg.embedVideo);
+    cfg.deviceFrame       = readBool(f, L"app", L"device_frame",       cfg.deviceFrame);
     cfg.msysRoot          = readStr (f, L"app", L"msys_root",          L"");
     cfg.uxplayPath        = readStr (f, L"app", L"uxplay_path",        L"");
 
@@ -268,6 +269,7 @@ void ConfigStore::save(const AppConfig& cfg) const {
     writeInt(f, L"app", L"tray_hint_shown",    cfg.trayHintShown ? 1 : 0);
     writeInt(f, L"app", L"auto_update",        cfg.autoUpdate ? 1 : 0);
     writeInt(f, L"app", L"embed_video",        cfg.embedVideo ? 1 : 0);
+    writeInt(f, L"app", L"device_frame",       cfg.deviceFrame ? 1 : 0);
     // Only a path a human put there is written back. Persisting a detected one would freeze
     // this run's layout into a file every copy on the machine reads - and the detection is
     // cheap and correct, so there is nothing to cache.

@@ -50,6 +50,7 @@ inline constexpr const wchar_t* kHintErrorPrefix   = L"Alıcı kapandı: ";
 // --- video window -----------------------------------------------------------
 inline constexpr const wchar_t* kVideoTitle = L"airplay — Görüntü";
 inline constexpr const wchar_t* kVideoFullscreenMenu = L"Tam ekran (F11)";
+inline constexpr const wchar_t* kVideoRotateMenu = L"Çerçeveyi çevir (R)";
 
 // --- receiver settings ------------------------------------------------------
 inline constexpr const wchar_t* kLabelName  = L"Bu bilgisayarın adı:";
@@ -68,6 +69,8 @@ inline constexpr const wchar_t* kChkAutostart   = L"Açılışta alıcıyı baş
 // The picture inside a window of ours instead of the receiver's own (docs/PHASE2-M2-SPEC.md).
 inline constexpr const wchar_t* kChkEmbed       = L"Görüntüyü uygulamada göster";
 inline constexpr const wchar_t* kChkLogon       = L"Windows açılışında başlat";
+// The connected phone drawn around the picture, notch and all (device_frames.h).
+inline constexpr const wchar_t* kChkFrame       = L"Telefon çerçevesi çiz";
 
 // Frame-rate ceiling advertised to the client. 30 is UxPlay's own default and the reason
 // mirroring can feel choppy; 60 is what we ask for.

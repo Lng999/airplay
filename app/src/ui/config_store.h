@@ -64,6 +64,9 @@ struct AppConfig {
     // Take the receiver's video window into a window of ours (docs/PHASE2-M2-SPEC.md).
     // Off means milestone-1 behaviour: the picture is uxplay.exe's own top-level window.
     bool         embedVideo        = true;
+    // Draw the connected phone around the picture: body, rounded display corners and the
+    // model's own notch or Dynamic Island (src/ui/device_frames.h). Needs embedVideo.
+    bool         deviceFrame       = true;
     std::wstring msysRoot;                     // empty => no runtime tree found
     std::wstring uxplayPath;                   // empty => not found, UI shows an error
     // Whether the two paths above came from config.ini and still resolve here. False means we
