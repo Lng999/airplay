@@ -724,6 +724,14 @@ void MainWindow::updateStatus() {
             hint = clientName_.empty() ? std::wstring(str::kHintUnknownClient) : clientName_;
             if (!clientModel_.empty()) hint += L" (" + clientModel_ + L")";
             if (!resolutionText_.empty()) hint += L" · " + resolutionText_;
+            if (currentKbps_ > 0) {
+                wchar_t br[32];
+                if (currentKbps_ >= 1000)
+                    _snwprintf(br, 32, L" · %.1f Mbps", currentKbps_ / 1000.0);
+                else
+                    _snwprintf(br, 32, L" · %d kbps", currentKbps_);
+                hint += br;
+            }
             if (currentFps_ > 0) {
                 wchar_t fps[32];
                 _snwprintf(fps, 32, L" · %d fps", currentFps_);
@@ -972,7 +980,10 @@ void MainWindow::onHostEvent(const airplay::HostEvent& ev) {
                 layout();
                 resizeToContent();
             }
-            if (state_ != airplay::HostState::Connected) currentFps_ = 0;
+            if (state_ != airplay::HostState::Connected) {
+                currentFps_  = 0;
+                currentKbps_ = 0;
+            }
             if (state_ == airplay::HostState::Waiting) {
                 ipv4_ = firstLocalIPv4();
                 clientName_.clear();
@@ -1033,6 +1044,14 @@ void MainWindow::onHostEvent(const airplay::HostEvent& ev) {
         // The client's own once-a-second -FPSdata report, used only for the fps readout.
         // It reads 0 while the screen is off; keep the last real figure rather than blinking
         // the status line between "60 fps" and nothing.
+        // What the receiver itself measured (patches/0005): the bitrate, and a frame rate
+        // that does not depend on the client having been asked for one.
+        case K::MirrorStats:
+            currentKbps_ = ev.kbps;
+            if (ev.fps > 0) currentFps_ = ev.fps;
+            updateStatus();
+            break;
+
         case K::MirrorFps:
             if (ev.srcWidth > 0) {
                 currentFps_ = ev.srcWidth;

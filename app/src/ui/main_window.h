@@ -113,7 +113,8 @@ private:
     static constexpr UINT_PTR kEmbedTimer  = 2;   // 300 ms, while the receiver runs
 
     airplay::HostState state_ = airplay::HostState::Stopped;
-    int   currentFps_     = 0;   // last non-zero submitSurfaceFPS, shown in the status line
+    int   currentFps_     = 0;   // last non-zero frame rate, shown in the status line
+    int   currentKbps_    = 0;   // last video bitrate from patches/0005
     bool  updateBusy_     = false;   // a check or a download is in flight
     std::wstring updateVersion_, updateUrl_, updatePageUrl_;
     std::wstring clientName_, clientModel_, lastError_, ipv4_;
