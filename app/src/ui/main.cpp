@@ -9,23 +9,27 @@
 #include <objbase.h>   // WIN32_LEAN_AND_MEAN leaves COM out of windows.h
 #include <shellapi.h>
 
+#include <string>
+
 #include "main_window.h"
 #include "single_instance.h"
 
 namespace {
 
-// -autostart / --autostart: behave as if [app] autostart_receiver were set. Used by the
-// smoke test so the receiver can be brought up without clicking Start.
-bool wantsAutostart() {
+// One flag, with or without the second dash.
+//   -autostart  behave as if [app] autostart_receiver were set (the smoke test uses it)
+//   -minimized  come up in the notification area; what the logon entry passes
+//               (src/ui/autostart.cpp)
+bool hasFlag(const wchar_t* name) {
     int argc = 0;
     LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
     if (!argv) return false;
+    const std::wstring shortForm = std::wstring(L"-") + name;
+    const std::wstring longForm  = std::wstring(L"--") + name;
     bool found = false;
-    for (int i = 1; i < argc; ++i) {
-        if (lstrcmpiW(argv[i], L"-autostart") == 0 || lstrcmpiW(argv[i], L"--autostart") == 0) {
-            found = true;
-            break;
-        }
+    for (int i = 1; i < argc && !found; ++i) {
+        found = lstrcmpiW(argv[i], shortForm.c_str()) == 0 ||
+                lstrcmpiW(argv[i], longForm.c_str()) == 0;
     }
     LocalFree(argv);
     return found;
@@ -59,9 +63,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int) {
                     MB_ICONERROR | MB_OK);
         return 1;
     }
-    window.show(cfg.startMinimized);
+    window.show(cfg.startMinimized || hasFlag(L"minimized"));
 
-    if (cfg.autostartReceiver || wantsAutostart()) window.startReceiver();
+    if (cfg.autostartReceiver || hasFlag(L"autostart")) window.startReceiver();
 
     MSG msg;
     while (GetMessageW(&msg, nullptr, 0, 0) > 0) {
