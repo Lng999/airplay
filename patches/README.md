@@ -8,6 +8,9 @@ clean checkout on every build.
 |---|---|
 | `0001-mdnsd-windows-iface.patch` | `lib/mdnsd` advertises `127.0.0.1` and joins the multicast group on the loopback interface, making the AirPlay service invisible to every other host (iPhone included). |
 | `0002-uxplay-handle-ctrl-break.patch` | `CtrlHandler` ignores `CTRL_BREAK_EVENT`, so a GUI host cannot stop UxPlay cleanly. |
+| `0003-uxplay-utf8-argv-manifest.patch` | A non-ASCII `-n <name>` is rejected on Windows: argv arrives in the ANSI code page. |
+| `0004-uxplay-report-mirror-idle.patch` | Hook: says within 400 ms that video frames stopped or resumed. |
+| `0005-uxplay-report-video-stats.patch` | Hook: reports the video bitrate and frame rate once a second. |
 
 ---
 
@@ -132,6 +135,23 @@ mirror active: video frames resumed
 `app/src/host/line_parser.cpp` turns those into `MirrorActivity` events. The reaction is now
 about half a second, and the GUI hides the frozen picture and mutes the receiver in that time.
 
+## `0005-uxplay-report-video-stats.patch` — how much video is actually arriving
+
+Also a hook, not a fix. Nothing upstream reports the video bitrate, and the only frame-rate
+figure is the client's own `-FPSdata` report — which the client only sends when asked, and
+which describes what the *phone* thinks it produced.
+
+`video_process()` sees every frame, so the patch counts bytes and frames there and a
+one-second GLib timer divides:
+
+```
+mirror stats: 12480 kbps 59 fps
+```
+
+Silent while no frames arrive (screen off), which `0004` already reports separately.
+`app/src/host/line_parser.cpp` turns the line into a `MirrorStats` event and the GUI puts
+`· 12.5 Mbps · 59 fps` on the status line.
+
 ## Applying
 
 From the repo root, against a clean submodule checkout:
@@ -151,7 +171,7 @@ working tree with **CRLF** endings while the patch is stored with LF. `git apply
 this correctly — verified against a synthetic LF-blob/CRLF-worktree repo. Plain
 `patch -p1` may not; prefer `git apply`.
 
-## How `build.sh` should apply these idempotently
+## How `build.sh` applies these (implemented)
 
 `scripts/build.sh` currently builds the submodule as-is. To make it patch-aware without
 ever leaving the submodule dirty in a surprising state, it should, right after the
@@ -164,7 +184,14 @@ ever leaving the submodule dirty in a surprising state, it should, right after t
    *unexpected* modifications you care about — a `git -C "${SRC_DIR}" stash list`-style
    escape hatch is overkill here; the submodule is pinned and disposable.
 
-2. **Or, if a reset is too blunt, test before applying.** For each patch:
+   This is what `scripts/build.sh` does. Option 2 below was the first implementation and
+   had to be abandoned: `0005` rewrites the context `0004` is anchored on, so on a correctly
+   patched tree neither the reverse check nor the forward check succeeds and the build died
+   claiming the patch did not apply. Note that the reset has to remove untracked files too
+   (`git clean -fd`) — `0003` creates `uxplay.rc` and `uxplay.manifest`, and re-applying it
+   over them fails.
+
+2. ~~**Or, if a reset is too blunt, test before applying.**~~ (abandoned, see above) For each patch:
    `git -C "${SRC_DIR}" apply --reverse --check "${p}"` succeeds *only* if the patch is
    already applied — skip it. Otherwise `git -C "${SRC_DIR}" apply --check "${p}"` must
    succeed before the real `git apply "${p}"` runs; if neither check passes, the submodule
