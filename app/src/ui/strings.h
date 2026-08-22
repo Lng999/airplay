@@ -47,6 +47,10 @@ inline constexpr const wchar_t* kHintUnknownClient = L"Bir cihaz bağlandı";
 inline constexpr const wchar_t* kHintUnknownError  = L"Bilinmeyen hata";
 inline constexpr const wchar_t* kHintErrorPrefix   = L"Alıcı kapandı: ";
 
+// --- video window -----------------------------------------------------------
+inline constexpr const wchar_t* kVideoTitle = L"airplay — Görüntü";
+inline constexpr const wchar_t* kVideoFullscreenMenu = L"Tam ekran (F11)";
+
 // --- receiver settings ------------------------------------------------------
 inline constexpr const wchar_t* kLabelName  = L"Bu bilgisayarın adı:";
 inline constexpr const wchar_t* kLabelPort  = L"Port";
@@ -61,6 +65,9 @@ inline constexpr const wchar_t* kChkH265        = L"H.265";
 inline constexpr const wchar_t* kChkDebug       = L"Ayrıntılı günlük";
 inline constexpr const wchar_t* kChkAlwaysOnTop = L"Her zaman üstte";
 inline constexpr const wchar_t* kChkAutostart   = L"Açılışta alıcıyı başlat";
+// The picture inside a window of ours instead of the receiver's own (docs/PHASE2-M2-SPEC.md).
+inline constexpr const wchar_t* kChkEmbed       = L"Görüntüyü uygulamada göster";
+inline constexpr const wchar_t* kChkLogon       = L"Windows açılışında başlat";
 
 // Frame-rate ceiling advertised to the client. 30 is UxPlay's own default and the reason
 // mirroring can feel choppy; 60 is what we ask for.
