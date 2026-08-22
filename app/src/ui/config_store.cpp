@@ -206,6 +206,7 @@ void ConfigStore::load(AppConfig& cfg) const {
     cfg.showDetails       = readBool(f, L"app", L"show_details",       cfg.showDetails);
     cfg.trayHintShown     = readBool(f, L"app", L"tray_hint_shown",    cfg.trayHintShown);
     cfg.autoUpdate        = readBool(f, L"app", L"auto_update",        cfg.autoUpdate);
+    cfg.embedVideo        = readBool(f, L"app", L"embed_video",        cfg.embedVideo);
     cfg.msysRoot          = readStr (f, L"app", L"msys_root",          L"");
     cfg.uxplayPath        = readStr (f, L"app", L"uxplay_path",        L"");
 
@@ -225,6 +226,12 @@ void ConfigStore::load(AppConfig& cfg) const {
 
     cfg.uxplayPathFromFile = !portable && !cfg.uxplayPath.empty() && fileExists(cfg.uxplayPath);
     if (!cfg.uxplayPathFromFile) cfg.uxplayPath = defaultUxplayPath();
+
+    cfg.vx = readInt(f, L"video", L"x", cfg.vx);
+    cfg.vy = readInt(f, L"video", L"y", cfg.vy);
+    cfg.vw = readInt(f, L"video", L"w", cfg.vw);
+    cfg.vh = readInt(f, L"video", L"h", cfg.vh);
+    cfg.videoFullscreen = readBool(f, L"video", L"fullscreen", cfg.videoFullscreen);
 
     cfg.x = readInt(f, L"window", L"x", cfg.x);
     cfg.y = readInt(f, L"window", L"y", cfg.y);
@@ -260,11 +267,18 @@ void ConfigStore::save(const AppConfig& cfg) const {
     writeInt(f, L"app", L"show_details",       cfg.showDetails ? 1 : 0);
     writeInt(f, L"app", L"tray_hint_shown",    cfg.trayHintShown ? 1 : 0);
     writeInt(f, L"app", L"auto_update",        cfg.autoUpdate ? 1 : 0);
+    writeInt(f, L"app", L"embed_video",        cfg.embedVideo ? 1 : 0);
     // Only a path a human put there is written back. Persisting a detected one would freeze
     // this run's layout into a file every copy on the machine reads - and the detection is
     // cheap and correct, so there is nothing to cache.
     writeStr(f, L"app", L"msys_root",   cfg.msysRootFromFile   ? cfg.msysRoot   : std::wstring());
     writeStr(f, L"app", L"uxplay_path", cfg.uxplayPathFromFile ? cfg.uxplayPath : std::wstring());
+
+    writeInt(f, L"video", L"x", cfg.vx);
+    writeInt(f, L"video", L"y", cfg.vy);
+    writeInt(f, L"video", L"w", cfg.vw);
+    writeInt(f, L"video", L"h", cfg.vh);
+    writeInt(f, L"video", L"fullscreen", cfg.videoFullscreen ? 1 : 0);
 
     writeInt(f, L"window", L"x", cfg.x);
     writeInt(f, L"window", L"y", cfg.y);
