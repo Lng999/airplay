@@ -189,9 +189,16 @@ struct UxplayHost::Impl {
         }
 
         // The reports are ~30 lines of XML every second. Useful as a signal, unreadable as a
-        // log, so the envelope never reaches the sink - only the parsed frame rate does.
+        // log, so the envelope never reaches the sink - only the parsed frame rate does. The
+        // same goes for the receiver's own once-a-second stats line (patches/0005): the
+        // numbers are emitted as a MirrorStats event just below, the text is noise.
         if (parsed.tag == LineTag::PlistKey || parsed.tag == LineTag::PlistInteger ||
             parsed.tag == LineTag::PlistNoise) {
+            return;
+        }
+        if (parsed.tag == LineTag::MirrorStats) {
+            for (const HostEvent& ev : parsed.events)
+                if (ev.kind == HostEventKind::MirrorStats) emit(ev);
             return;
         }
 
