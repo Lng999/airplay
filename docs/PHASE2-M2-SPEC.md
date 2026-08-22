@@ -112,6 +112,67 @@ x= y= w= h=         ; görüntü penceresinin son konumu
 fullscreen=0        ; görüntü penceresi tam ekran mı kapandı
 ```
 
+## 2b. Cihaz çerçevesi (2026-08-22)
+
+Bağlanan telefonun modeli biliniyorsa görüntünün etrafına o telefonun gövdesi çiziliyor —
+çentiği/Dynamic Island'ı dahil. iPhone 13 ile iPhone 15'in üst kesimi farklı olduğu için
+çerçeve modele göre değişmek zorunda.
+
+### [ÖLÇÜLDÜ] Model zaten geliyor
+
+İstemci SETUP plist'inde `model` alanını yolluyor (`lib/raop_handlers.h:749` →
+`report_client_request` → `uxplay.cpp:2363`), biz de `ClientInfo` olayında yakalıyoruz.
+Bu projenin kendi logunda ölçüldü:
+
+```
+connection request from mustafanın iPhone (iPhone14,5) with deviceID = 46:F2:E9:84:EA:27
+```
+
+`iPhone14,5` = iPhone 13. `app/src/ui/device_frames.*` bu tanımlayıcıyı ekran oranına, köşe
+yarıçapına ve çentik/ada geometrisine çeviriyor. Tabloda olmayan model **uydurulmuyor**:
+`iPhoneNN,M`'deki `NN` ≥ 15 ise ada, 10–14 ise çentik, altındaysa çentiksiz varsayılıyor ve
+isim boş bırakılıyor. `iPhone`/`iPad` ile başlamayan bir istemcide (Mac yansıtması) çerçeve
+hiç çizilmiyor.
+
+### [ÖLÇÜLDÜ] Çentik gerçek bir oyuk: `SetWindowRgn` süreçler arası çalışıyor
+
+Görüntünün *üstüne* boyayamayız — yabancı child pencere bizim çizdiğimizin üstünde. Çözüm
+pencereyi bölgeyle kırpmak; probe sonucu:
+
+```
+SetWindowRgn(foreign hwnd)   rc=1 err=0
+GetWindowRgn -> a region is set,  box 1175x661
+```
+
+Bölge pencere koordinatlarında olduğu için her boyut değişiminde yeniden uygulanıyor.
+Görsel olarak da doğrulandı: `airplay_embed_live` testi çerçeve kurulduğu anda kendi ekran
+görüntüsünü alıyor (`airplay_embed_live.exe <gst-launch> <out.bmp>`), gövde + oyuk +
+yuvarlak köşeler canlı `d3d11videosink` üzerinde göründü. Yani flip-model swapchain bölge
+kırpmasına uyuyor.
+
+### [KARAR] Pillarbox kırpma aynı bölgeyle
+
+Telefon dikey ekranı 16:9'un ortasına yan bantlarla gönderiyorsa çerçeve anlamsız olurdu.
+Bölge bu işi de görüyor: guest penceresi pencereden büyük yapılıp içerik ekran dikdörtgenine
+oturtuluyor, bantlar kırpmanın dışında kalıyor. Kural tek: *cihazın oranındaki ortalanmış
+dikdörtgeni al*. Akış zaten cihazın oranındaysa (ister dikey ister yatay) kırpma yapılmıyor.
+
+### [AÇIK] Yön belirsizliği — `R` tuşu
+
+Akış cihazın iki oranından birine uyuyorsa telefonun yönü belli. Uymuyorsa (yani bantlı
+geliyorsa) bantlar telefon dik de yatık da olsa aynı görünüyor; ayırt etmek mümkün değil.
+Varsayılan **dikey**; kullanıcı `R` (ya da pencere sistem menüsü → "Çerçeveyi çevir") ile
+çeviriyor. iPhone'un gerçekte ne gönderdiği **[MANUEL]** olarak ölçülecek; native oran
+geliyorsa bu belirsizlik hiç oluşmaz.
+
+### Kabul kriterleri (ek)
+
+- `airplay_frame_tests` (ctest) yeşil: tablo, aile kuralı, dikey/yatay, pillarbox kırpma,
+  çentik ve ada yerleşimi.
+- **[MANUEL]** iPhone 13 bağlanınca çerçeve gerçek telefona benziyor; çentik ekranın
+  üstünden oyulmuş görünüyor, gövdeyle aynı hizada.
+- **[MANUEL]** Telefon yan çevrilince çerçeve de yan dönüyor (ya da `R` ile düzeliyor).
+
 ## 3. FPS ve bit hızı
 
 - **FPS** zaten var: istemcinin kendi `-FPSdata` raporundan (`MirrorFps`), saniyede bir.
