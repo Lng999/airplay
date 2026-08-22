@@ -151,6 +151,23 @@ ParsedLine parseUxplayLineDetailed(const std::string& rawIn) {
         return out;
     }
 
+    // --- stream statistics (patches/0005), once a second while frames arrive. Measured in
+    //     the receiver, so it needs no -FPSdata and describes what really came in. Like the
+    //     -FPSdata envelope it never reaches the log: one line a second is noise there.
+    if (startsWith(t, "mirror stats:")) {
+        out.tag = LineTag::MirrorStats;
+        unsigned kbps = 0, fps = 0;
+        if (std::sscanf(t.c_str(), "mirror stats: %u kbps %u fps", &kbps, &fps) == 2) {
+            HostEvent ev{};
+            ev.kind = HostEventKind::MirrorStats;
+            ev.message = t;
+            ev.kbps = static_cast<int>(kbps);
+            ev.fps  = static_cast<int>(fps);
+            out.events.push_back(ev);
+        }
+        return out;
+    }
+
     // --- -FPSdata report (lib/raop_rtp_mirror.c:807-811 dumps the client's plist as XML).
     //     The client keeps requesting feedback while its screen is off, so the only honest
     //     "no picture is arriving" signal is submitSurfaceFPS dropping to 0 in these reports.
