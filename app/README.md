@@ -13,6 +13,7 @@ app/
   src/ui/                         this GUI (window, tray, config, log, single instance)
   src/ui/video_embed.*            find the receiver's window and adopt it (or hand it back)
   src/ui/video_window.*           the window the picture lives in
+  src/ui/device_frames.*          which phone is connected, and the shape of its frame
   src/ui/autostart.*              the HKCU Run value behind "start with Windows"
   res/                            app.rc + app.manifest (Common Controls v6, PerMonitorV2, asInvoker)
   tests/                          host unit tests + a live test that spawns the real receiver
@@ -82,7 +83,8 @@ button. Two section headers open the rest:
 - **Gelişmiş** — port, **Akıcılık** (the frame-rate ceiling), video/audio sink, **Görüntü
   çözücü** (decoder), Bağlantı zaman aşımı, Fullscreen, H.265, Ayrıntılı günlük (debug),
   Always on top, Start receiver on launch, **Görüntüyü uygulamada göster** (the picture
-  window, see below), **Windows açılışında başlat** and *Komutu kopyala* (the exact argv,
+  window, see below), **Windows açılışında başlat**, **Telefon çerçevesi çiz** and
+  *Komutu kopyala* (the exact argv,
   for reproducing a problem in a plain terminal).
 - **Ayrıntılar** — the last 500 log lines.
 
@@ -136,6 +138,33 @@ is in `docs/PHASE2-M2-SPEC.md`; in short:
 `app/tests/test_embed_live.cpp` exercises the whole path against a real `d3d11videosink`
 (a `videotestsrc` pipeline standing in for the receiver) — find, adopt, letterbox, aspect,
 release, and that the other process survives all of it.
+
+### The device frame
+
+`[app] device_frame=1` (the default, needs `embed_video`) draws the connected phone around
+the picture. The client says what it is: the SETUP plist's `model` key
+(`third_party/UxPlay/lib/raop_handlers.h:749`) reaches us as `HostEvent::clientModel`, and
+in this project's own logs that reads `iPhone14,5` - an iPhone 13. `src/ui/device_frames.*`
+turns the identifier into a screen aspect, a corner radius and the right top cut-out, which
+is the whole point: a 13 has a notch where a 15 has a Dynamic Island.
+
+- **The body is ours to paint**; the notch or island is *cut out of the guest* with
+  `SetWindowRgn`, so what shows through the hole is the body underneath. Region calls work
+  across the process boundary (measured, `docs/PHASE2-M2-SPEC.md`), but they are in window
+  coordinates, so every resize re-applies the region.
+- **The same region crops** whatever pillarbox the phone baked into the stream: the guest is
+  blown up past the window until the phone screen lands on the screen rectangle, and the
+  bars fall outside the clip. A stream that already has the device's aspect is not cropped.
+- **Orientation** is read from the stream when it matches one of the device's two aspects.
+  When the stream carries bars it cannot be read at all - bars look the same whichever way
+  the phone is held - so portrait is assumed and **R** (or the system menu) flips it.
+- **An unknown model is not invented.** `iPhoneNN,M` with NN >= 15 gets an island, 10-14 a
+  notch, below that no cut-out, and the status line keeps showing the raw identifier. A
+  client that is not an iPhone or iPad - a Mac mirroring its desktop - gets no frame.
+
+`app/tests/test_device_frames.cpp` covers the table and the geometry in ctest;
+`test_embed_live.cpp` puts a real frame around a real `d3d11videosink` and takes its own
+screenshot of the result (`airplay_embed_live.exe <gst-launch> <out.bmp>`).
 
 ### Sleeping phone
 
@@ -233,6 +262,7 @@ auto_update=1       ; check GitHub for a newer release ~4 s after the window is 
                     ; 0 only disables the startup check; the tray menu item still works.
 embed_video=1       ; show the picture in our own window (see "The picture window").
                     ; 0 = milestone-1 behaviour: uxplay.exe keeps its own top-level window.
+device_frame=1      ; draw the connected phone around it, notch and all. Needs embed_video.
 msys_root=          ; empty = detect. Written back only when a human put a path here:
 uxplay_path=        ; a portable install answers both from its own folder (see below).
 
