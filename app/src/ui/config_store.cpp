@@ -298,7 +298,10 @@ airplay::HostConfig ConfigStore::toHostConfig(const AppConfig& cfg) {
     hc.port         = cfg.port;
     hc.videoSink    = narrow(cfg.videoSink);
     hc.audioSink    = narrow(cfg.audioSink);
-    hc.fullscreen   = cfg.fullscreen;
+    // -fs makes the sink open its own fullscreen window. With embed_video on, fullscreen
+    // belongs to our picture window instead (F11), and adopting a fullscreen window would
+    // only mean undoing it again - see docs/PHASE2-M2-SPEC.md.
+    hc.fullscreen   = cfg.fullscreen && !cfg.embedVideo;
     hc.h265         = cfg.h265;
     hc.debug        = cfg.debug;
     hc.noHold       = cfg.noHold;
