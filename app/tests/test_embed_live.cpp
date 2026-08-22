@@ -13,6 +13,7 @@
 #include "config_store.h"   // Win32 headers in the right order
 
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 
 #include "video_embed.h"
@@ -42,6 +43,54 @@ void pump(unsigned ms) {
     }
 }
 
+// Grab what is actually on screen where the window is. Timing a screenshot from outside
+// this process is guesswork - the window only lives for a few seconds - so the test takes
+// its own, at the exact moment the frame is up. 24-bit BMP, no image library needed.
+bool saveWindowShot(HWND h, const wchar_t* path) {
+    RECT r{};
+    if (!GetWindowRect(h, &r)) return false;
+    const int w = r.right - r.left, hgt = r.bottom - r.top;
+    if (w <= 0 || hgt <= 0) return false;
+
+    HDC screen = GetDC(nullptr);
+    HDC mem = CreateCompatibleDC(screen);
+    HBITMAP bmp = CreateCompatibleBitmap(screen, w, hgt);
+    HGDIOBJ old = SelectObject(mem, bmp);
+    BitBlt(mem, 0, 0, w, hgt, screen, r.left, r.top, SRCCOPY);
+    SelectObject(mem, old);
+
+    BITMAPINFOHEADER bi{};
+    bi.biSize = sizeof(bi);
+    bi.biWidth = w;
+    bi.biHeight = hgt;          // bottom-up
+    bi.biPlanes = 1;
+    bi.biBitCount = 24;
+    bi.biCompression = BI_RGB;
+    const int stride = ((w * 3 + 3) / 4) * 4;
+    const int bytes = stride * hgt;
+    std::string pixels(static_cast<size_t>(bytes), '\0');
+    const int got = GetDIBits(mem, bmp, 0, hgt, &pixels[0],
+                              reinterpret_cast<BITMAPINFO*>(&bi), DIB_RGB_COLORS);
+
+    DeleteObject(bmp);
+    DeleteDC(mem);
+    ReleaseDC(nullptr, screen);
+    if (!got) return false;
+
+    BITMAPFILEHEADER fh{};
+    fh.bfType = 0x4D42;   // "BM"
+    fh.bfOffBits = sizeof(fh) + sizeof(bi);
+    fh.bfSize = fh.bfOffBits + bytes;
+
+    FILE* f = _wfopen(path, L"wb");
+    if (!f) return false;
+    fwrite(&fh, sizeof(fh), 1, f);
+    fwrite(&bi, sizeof(bi), 1, f);
+    fwrite(pixels.data(), 1, static_cast<size_t>(bytes), f);
+    fclose(f);
+    return true;
+}
+
 std::wstring clientSizeText(HWND h) {
     RECT r{};
     GetClientRect(h, &r);
@@ -54,6 +103,8 @@ std::wstring clientSizeText(HWND h) {
 
 int wmain(int argc, wchar_t** argv) {
     std::wstring gst = argc > 1 ? argv[1] : L"C:/msys64/ucrt64/bin/gst-launch-1.0.exe";
+    // Optional second argument: write a screenshot of the framed window there (.bmp).
+    const wchar_t* shotPath = argc > 2 ? argv[2] : nullptr;
 
     std::wstring cmd = L"\"" + gst +
                        L"\" videotestsrc pattern=smpte is-live=true ! "
@@ -86,6 +137,9 @@ int wmain(int argc, wchar_t** argv) {
 
     // 2. adopt it into a real picture window
     ui::AppConfig cfg;
+    // Topmost so the window is actually visible while the test runs: this is a live test a
+    // human is meant to watch, and it exercises setAlwaysOnTop on the way.
+    cfg.alwaysOnTop = true;
     ui::VideoWindow video(GetModuleHandleW(nullptr), cfg);
     const bool adopted = video.adopt(guest);
     check(adopted, "VideoWindow::adopt takes the window");
@@ -120,6 +174,37 @@ int wmain(int argc, wchar_t** argv) {
     DWORD ec = 0;
     GetExitCodeProcess(pi.hProcess, &ec);
     check(ec == STILL_ACTIVE, "the receiver process survived the surgery");
+
+    // 3b. the device frame: clip the guest to a phone-shaped region and crop the bars
+    video.setDevice(L"iPhone14,5");
+    pump(600);
+    check(video.frameActive(), "the frame turns on for a known phone");
+
+    HRGN probe = CreateRectRgn(0, 0, 1, 1);
+    const int kind = GetWindowRgn(guest, probe);
+    check(kind != ERROR, "the guest carries a window region");
+    RECT rb{};
+    GetRgnBox(probe, &rb);
+    DeleteObject(probe);
+    std::printf("region box %ldx%ld\n", rb.right - rb.left, rb.bottom - rb.top);
+    check(rb.right - rb.left > 0 && rb.bottom - rb.top > 0, "the region is not empty");
+
+    GetClientRect(video.hwnd(), &client);
+    GetWindowRect(guest, &g);
+    // 16:9 into a 19.5:9 phone: the guest has to be blown up wider than the window and the
+    // bars pushed out of the region.
+    check((g.right - g.left) > client.right, "the pillarbox is cropped, not letterboxed");
+    check(rb.right - rb.left < (g.right - g.left), "the region is narrower than the guest");
+
+    GetExitCodeProcess(pi.hProcess, &ec);
+    check(ec == STILL_ACTIVE, "the receiver survived the region surgery too");
+    pump(1500);
+
+    if (shotPath) {
+        const bool saved = saveWindowShot(video.hwnd(), shotPath);
+        check(saved, "screenshot of the framed window written");
+        std::printf("shot -> %ls\n", shotPath);
+    }
 
     // 4. hand it back
     video.release();

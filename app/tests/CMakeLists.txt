@@ -33,6 +33,7 @@ add_executable(airplay_embed_live
     test_embed_live.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui/video_embed.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui/video_window.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui/device_frames.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui/config_store.cpp)
 target_link_libraries(airplay_embed_live PRIVATE airplay_host shell32 ole32 user32 gdi32)
 target_include_directories(airplay_embed_live PRIVATE
