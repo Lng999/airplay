@@ -302,6 +302,14 @@ and do **not** appear here — a self-contained bundle (Phase 3) must copy them 
    `HOME` / `XDG_CONFIG_HOMEDIR`.
 5. **`gst-inspect-1.0` counts 212 plugins** with this package set — a quick sanity number if
    the registry ever has to be rebuilt.
+6. **`scripts/build.sh` resets the submodule before it patches** (added 2026-08-22 with
+   `patches/0005`). It runs `git checkout -- .` *and* `git clean -fd` inside
+   `third_party/UxPlay`, so anything hand-edited there — including untracked files — is
+   discarded on every build. Edit `patches/*.patch`, never the submodule. The previous
+   scheme detected an already-applied patch with `git apply --reverse --check`, and that
+   broke the moment two patches touched the same neighbourhood: `0005` rewrites the context
+   `0004` is anchored on, so on a correctly patched tree neither check succeeded and the
+   build died claiming the patch did not apply.
 
 ## 8. Verified vs NOT verified
 
