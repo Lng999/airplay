@@ -28,5 +28,10 @@ Sözleşme: `app/include/airplay/uxplay_host.h` (değiştirmek = bu dosyayı da 
 - U: `airplay-gui.exe` açılır, Start → child başlar, status "Waiting (AirPlay-PC @ 192.168.x.x)" olur (IP: `GetAdaptersAddresses` ile ilk non-loopback IPv4), `scripts/mdns-browse.py --expect AirPlay-PC` PASS; Stop → child kapanır; config.ini yazılır/okunur; ikinci örnek ilkini öne getirir; tray menüsü çalışır. Manuel (iPhone): `docs/MANUAL-VERIFY.md` Phase 2.
 - Ortak: `scripts/build-app.sh` (orkestratör) `app/` → `build-app/airplay-gui.exe`; uyarısız derlenir.
 
-## M2 (sonraki spec)
-Kendi `uxplay_core` (lib/ + renderers/), `GstVideoOverlay` ile HWND embed, FPS/bitrate, gerçek aspect-ratio kontrolü.
+## M2 → `docs/PHASE2-M2-SPEC.md` (yapıldı, 2026-08-22)
+Bu bölümün öngörüsü — kendi `uxplay_core`'umuz + `GstVideoOverlay` — **uygulanmadı ve
+uygulanamazdı**: sink kendisine verilen HWND'yi subclass ediyor,
+`SetWindowLongPtr(GWLP_WNDPROC)` ise başka sürecin penceresinde çalışmıyor. Bunun yerine
+alıcının kendi penceresi `SetParent` ile evlat ediniliyor; ölçümler ve gerekçe
+`docs/PHASE2-M2-SPEC.md` içinde. FPS/bitrate ise `patches/0005` ile alıcının kendi
+ölçümünden geliyor. Aspect-ratio hem letterbox hem `WM_SIZING` ile korunuyor.
