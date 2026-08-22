@@ -38,19 +38,26 @@ fi
 
 # --- apply local patches to the submodule (idempotent) -----------------------
 # patches/*.patch are kept out of the submodule; see patches/README.md.
-# Already-applied patches are detected via `git apply --reverse --check`.
+#
+# Reset first, then apply the whole set in order. The older scheme - detect an
+# already-applied patch with `git apply --reverse --check` - stopped working once two
+# patches touched the same neighbourhood: 0005 rewrites the context 0004 is anchored on, so
+# neither the reverse check nor the forward check succeeds and the build died on a tree that
+# was in fact correctly patched. Resetting makes the step idempotent by construction.
+#
+# The submodule is pinned and disposable (patches/README.md); anything hand-edited in there
+# is discarded here, including untracked files - 0003 creates two.
 apply_patches() {
     local p name
+    git -C "${SRC_DIR}" checkout -- . || die "could not reset third_party/UxPlay"
+    git -C "${SRC_DIR}" clean -qfd    || die "could not clean third_party/UxPlay"
+    echo "submodule reset to the pinned checkout"
     for p in "${REPO_ROOT}"/patches/*.patch; do
         [ -e "$p" ] || continue
         name="$(basename "$p")"
-        if git -C "${SRC_DIR}" -c core.autocrlf=true apply --reverse --check --ignore-whitespace "$p" >/dev/null 2>&1; then
-            echo "patch ${name}: already applied"
-        elif git -C "${SRC_DIR}" -c core.autocrlf=true apply --check --ignore-whitespace "$p" >/dev/null 2>&1; then
-            git -C "${SRC_DIR}" -c core.autocrlf=true apply --ignore-whitespace "$p" && echo "patch ${name}: applied"
-        else
-            die "patch ${name} does not apply cleanly to third_party/UxPlay (submodule pin changed?)"
-        fi
+        git -C "${SRC_DIR}" -c core.autocrlf=true apply --ignore-whitespace "$p" \
+            || die "patch ${name} does not apply cleanly to third_party/UxPlay (submodule pin changed?)"
+        echo "patch ${name}: applied"
     done
 }
 
