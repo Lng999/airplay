@@ -1,14 +1,19 @@
-# app/ — airplay-gui (Win32 GUI, Milestone 1)
+# app/ — airplay-gui (Win32 GUI, Milestone 2)
 
-The Windows front-end for the UxPlay-based AirPlay receiver. In Milestone 1 the GUI does
-**not** contain the AirPlay stack: it starts `uxplay.exe` as a child process, parses its
-stdout and shows the state. See `docs/PHASE2-SPEC.md` and `docs/DESIGN.md` §6.1.
+The Windows front-end for the UxPlay-based AirPlay receiver. The GUI does **not** contain
+the AirPlay stack: it starts `uxplay.exe` as a child process, parses its stdout and shows
+the state. Milestone 2 adds the picture: the receiver's video window is adopted into a
+window of ours (`SetParent`), so it is framed, letterboxed, resizable and can go fullscreen.
+See `docs/PHASE2-SPEC.md`, `docs/PHASE2-M2-SPEC.md` and `docs/DESIGN.md` §6.1.
 
 ```
 app/
   include/airplay/uxplay_host.h   contract between the UI and the host (orchestrator owns it)
   src/host/                       child-process host: CreateProcess, stdout reader, line parser
   src/ui/                         this GUI (window, tray, config, log, single instance)
+  src/ui/video_embed.*            find the receiver's window and adopt it (or hand it back)
+  src/ui/video_window.*           the window the picture lives in
+  src/ui/autostart.*              the HKCU Run value behind "start with Windows"
   res/                            app.rc + app.manifest (Common Controls v6, PerMonitorV2, asInvoker)
   tests/                          host unit tests + a live test that spawns the real receiver
 ```
@@ -75,9 +80,10 @@ dot, the state, one line saying what to do next, the receiver name and a single 
 button. Two section headers open the rest:
 
 - **Gelişmiş** — port, **Akıcılık** (the frame-rate ceiling), video/audio sink, **Görüntü
-  çözücü** (decoder), Fullscreen, H.265, Ayrıntılı günlük (debug), the client FPS-report
-  switch, Always on top, Start receiver on launch and *Komutu kopyala* (the exact argv, for
-  reproducing a problem in a plain terminal).
+  çözücü** (decoder), Bağlantı zaman aşımı, Fullscreen, H.265, Ayrıntılı günlük (debug),
+  Always on top, Start receiver on launch, **Görüntüyü uygulamada göster** (the picture
+  window, see below), **Windows açılışında başlat** and *Komutu kopyala* (the exact argv,
+  for reproducing a problem in a plain terminal).
 - **Ayrıntılar** — the last 500 log lines.
 
 Opening or closing a section re-fits the window height and is remembered in `config.ini`.
@@ -99,6 +105,37 @@ Both ends are closed now: the child runs inside a job object with
 **Start** first terminates any process whose image is exactly our `uxplay.exe`
 (`stale_receivers.cpp`), logging how many it removed. A manually launched `AirPlay.bat` is
 therefore closed by pressing Start — deliberately, since the two would otherwise fight.
+
+### The picture window
+
+`[app] embed_video=1` (the default) makes the mirrored picture appear in a window of ours
+rather than in `uxplay.exe`'s. The mechanism, and why the obvious alternative does not work,
+is in `docs/PHASE2-M2-SPEC.md`; in short:
+
+- `d3d11videosink` creates a top-level window in the **child** process once frames arrive.
+  `GstVideoOverlay` cannot be used to point it at one of our HWNDs, because the sink
+  subclasses whatever window it is handed and `SetWindowLongPtr(GWLP_WNDPROC)` is the one
+  call Win32 refuses across a process boundary.
+- Reparenting is allowed. A 300 ms timer looks for a top-level window owned by the child
+  (by pid — `GetClassNameW` returns a single character for that window), makes it `WS_CHILD`
+  and `SetParent`s it into `AirplayVideoWindow`. The sink keeps owning, drawing into and
+  resizing its own window; we only decide where it sits.
+- The client size the window had **before** adoption is the source resolution, so the status
+  line shows `1920×1080` without `-d`.
+- Ours letterboxes the guest at that aspect on a black background, and dragging its edge
+  keeps the aspect (`WM_SIZING`). **F11**, **Alt+Enter**, a double click, or the entry added
+  to the window's own system menu toggle fullscreen; **Esc** leaves it. *Her zaman üstte*
+  now applies to this window too.
+- Closing the picture window hands the receiver's window back to the desktop and does not
+  end the session; it is not adopted again until the next Start.
+- Release always happens **before** the child is stopped. By then the guest is our child
+  window, and Windows destroys child windows along with their parent — including one that
+  belongs to another process, which the sink does not expect.
+- `-fs` is not passed while embedding: fullscreen is this window's job.
+
+`app/tests/test_embed_live.cpp` exercises the whole path against a real `d3d11videosink`
+(a `videotestsrc` pipeline standing in for the receiver) — find, adopt, letterbox, aspect,
+release, and that the other process survives all of it.
 
 ### Sleeping phone
 
@@ -194,25 +231,38 @@ show_details=0
 tray_hint_shown=0   ; the one-shot "still running in the tray" balloon
 auto_update=1       ; check GitHub for a newer release ~4 s after the window is up.
                     ; 0 only disables the startup check; the tray menu item still works.
+embed_video=1       ; show the picture in our own window (see "The picture window").
+                    ; 0 = milestone-1 behaviour: uxplay.exe keeps its own top-level window.
 msys_root=          ; empty = detect. Written back only when a human put a path here:
 uxplay_path=        ; a portable install answers both from its own folder (see below).
 
 [window]
 x=…  y=…  w=…  h=…
+
+[video]
+x=…  y=…  w=…  h=…  ; where the picture window was last
+fullscreen=0        ; and whether it was fullscreen
 ```
 
-## Milestone 1 limitations
+"Windows açılışında başlat" is **not** in `config.ini`. Two mechanisms can start us at
+logon — `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\airplay` and the optional
+Startup shortcut `installer/airplay.iss` offers — and a checkbox backed by a third place
+would drift out of step with both. It reads either, writes the Run value
+(`"<exe>" -minimized`) and, when switched off, removes the shortcut as well
+(`src/ui/autostart.cpp`).
 
-- **The video window belongs to `uxplay.exe`**, not to us. We do not reparent or embed it;
-  that is Milestone 2 (`GstVideoOverlay` + a real `uxplay_core`). Consequently *Always on
-  top* applies to the **GUI** window only, and *Fullscreen* is handled by the sink
-  (Alt+Enter in the video window).
-- **No FPS and no bitrate.** Those numbers exist only inside the renderer, which we do not
-  link against in M1.
-- **Resolution is shown only when "Ayrıntılı günlük" (debug) is on.** UxPlay logs the mirrored size at
-  DEBUG level inside the library (`lib/raop_rtp_mirror.c:608-609`); without `-d` the line is
-  never printed. Turning it on also re-enables stdout buffering, so log lines arrive in
-  bursts.
-- **Any configuration change needs a Stop/Start.**
+## What is still out of reach
+
+- **We do not own the pixels.** The picture window is adopted, not rendered by us: there is
+  no `uxplay_core` linked into this process, so anything that needs to touch frames — a
+  screenshot, a recording, an overlay — is not possible from here.
+- **Resolution and frame rate depend on how you are running.** Both come for free while
+  embedding (adoption reports the size, `patches/0005` reports rate and bitrate). With
+  `embed_video=0` the resolution again needs "Ayrıntılı günlük" (`-d`): UxPlay logs the
+  mirrored size at DEBUG level inside the library (`lib/raop_rtp_mirror.c:608-609`) and
+  without `-d` the line is never printed. Turning it on also re-enables stdout buffering,
+  so log lines arrive in bursts.
+- **Any receiver setting needs a Stop/Start.** `embed_video` is the exception: it acts at
+  once, because it is ours and not part of the child's argv.
 - Client allow/deny is decided inside the child; the GUI cannot prompt interactively.
 - Real mirroring can only be confirmed with an actual iPhone — see `docs/MANUAL-VERIFY.md`.
