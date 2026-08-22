@@ -42,4 +42,16 @@ target_compile_options(airplay_embed_live PRIVATE -Wall -Wextra)
 target_link_options(airplay_embed_live PRIVATE -municode -static)
 set_target_properties(airplay_embed_live PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
 
+# ---- unit tests: the device-frame table and geometry (no window, no receiver) --------------------
+add_executable(airplay_frame_tests
+    test_device_frames.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui/device_frames.cpp)
+target_link_libraries(airplay_frame_tests PRIVATE airplay_host)
+target_include_directories(airplay_frame_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include)
+target_compile_options(airplay_frame_tests PRIVATE -Wall -Wextra)
+set_target_properties(airplay_frame_tests PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
+
 add_test(NAME airplay_host_tests COMMAND airplay_host_tests)
+add_test(NAME airplay_frame_tests COMMAND airplay_frame_tests)
