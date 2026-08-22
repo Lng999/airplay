@@ -10,11 +10,13 @@
 #include <vector>
 
 #include "../res/resource.h"
+#include "autostart.h"
 #include "single_instance.h"
 #include "stale_receivers.h"
 #include "strings.h"
 #include "updater.h"
 #include "version.h"
+#include "video_embed.h"
 
 namespace ui {
 
@@ -52,6 +54,8 @@ enum : int {
     IDC_CHK_DEBUG,
     IDC_CHK_ALWAYSONTOP,
     IDC_CHK_AUTOSTART,
+    IDC_CHK_EMBED,
+    IDC_CHK_LOGON,
     IDC_BTN_TOGGLE,
     IDC_BTN_COPY,
     IDC_SEC_ADVANCED,
@@ -188,10 +192,11 @@ std::wstring firstLocalIPv4() {
 // ---------------------------------------------------------------------------
 
 MainWindow::MainWindow(HINSTANCE hinst, ConfigStore& store, AppConfig& cfg)
-    : hinst_(hinst), store_(store), cfg_(cfg) {}
+    : hinst_(hinst), store_(store), cfg_(cfg), video_(hinst, cfg) {}
 
 MainWindow::~MainWindow() {
     host_.setCallback(nullptr);
+    releaseVideo();
     host_.stop();
     if (fontUi_) DeleteObject(fontUi_);
     if (fontStatus_) DeleteObject(fontStatus_);
@@ -330,6 +335,10 @@ void MainWindow::createControls() {
                          IDC_CHK_ALWAYSONTOP);
     chkAutostart_   = mk(L"BUTTON", str::kChkAutostart, BS_AUTOCHECKBOX | WS_TABSTOP,
                          IDC_CHK_AUTOSTART);
+    chkEmbed_       = mk(L"BUTTON", str::kChkEmbed, BS_AUTOCHECKBOX | WS_TABSTOP,
+                         IDC_CHK_EMBED);
+    chkLogon_       = mk(L"BUTTON", str::kChkLogon, BS_AUTOCHECKBOX | WS_TABSTOP,
+                         IDC_CHK_LOGON);
 
     btnToggle_ = mk(L"BUTTON", str::kBtnStart, BS_DEFPUSHBUTTON | WS_TABSTOP, IDC_BTN_TOGGLE);
     btnCopy_   = mk(L"BUTTON", str::kBtnCopyCmd, BS_PUSHBUTTON | WS_TABSTOP, IDC_BTN_COPY);
@@ -352,6 +361,7 @@ void MainWindow::createControls() {
     HWND all[] = {status_,     hint_,           lblName_,       editName_,      lblPort_,
                   editPort_,   lblVideo_,       cmbVideo_,      lblAudio_,      cmbAudio_,
                   chkFullscreen_, chkH265_,     chkDebug_,      chkAlwaysOnTop_, chkAutostart_,
+                  chkEmbed_,   chkLogon_,
                   lblFps_,     cmbFps_,         lblDecoder_,    cmbDecoder_,
                   lblReset_,   cmbReset_,
                   btnToggle_,  btnCopy_,        secAdvanced_,   secDetails_,    listLog_};
@@ -417,6 +427,9 @@ void MainWindow::layout() {
         y += s(24);
         place(chkAlwaysOnTop_, m, y, s(118), s(20));
         place(chkAutostart_, m + s(124), y, s(170), s(20));
+        y += s(24);
+        place(chkEmbed_, m, y, s(210), s(20));
+        place(chkLogon_, m + s(216), y, s(210), s(20));
         y += s(28);
         place(btnCopy_, m, y, s(140), s(28));
         y += s(36);
@@ -439,8 +452,8 @@ void MainWindow::applySectionVisibility() {
     const int adv = showAdvanced_ ? SW_SHOW : SW_HIDE;
     for (HWND h : {lblPort_, editPort_, lblFps_, cmbFps_, lblVideo_, cmbVideo_, lblDecoder_,
                    cmbDecoder_, lblAudio_, cmbAudio_, lblReset_, cmbReset_, chkFullscreen_,
-                   chkH265_, chkDebug_, chkAlwaysOnTop_, chkAutostart_,
-                   btnCopy_})
+                   chkH265_, chkDebug_, chkAlwaysOnTop_, chkAutostart_, chkEmbed_,
+                   chkLogon_, btnCopy_})
         if (h) ShowWindow(h, adv);
     if (listLog_) ShowWindow(listLog_, showDetails_ ? SW_SHOW : SW_HIDE);
 
@@ -650,6 +663,9 @@ void MainWindow::controlsFromConfig() {
     setChecked(chkDebug_, cfg_.debug);
     setChecked(chkAlwaysOnTop_, cfg_.alwaysOnTop);
     setChecked(chkAutostart_, cfg_.autostartReceiver);
+    setChecked(chkEmbed_, cfg_.embedVideo);
+    // Not a config.ini value: the registry (and the installer's Startup shortcut) own it.
+    setChecked(chkLogon_, isLaunchAtLogon());
 }
 
 void MainWindow::configFromControls() {
@@ -681,6 +697,7 @@ void MainWindow::configFromControls() {
     cfg_.debug             = isChecked(chkDebug_);
     cfg_.alwaysOnTop       = isChecked(chkAlwaysOnTop_);
     cfg_.autostartReceiver = isChecked(chkAutostart_);
+    cfg_.embedVideo        = isChecked(chkEmbed_);
 }
 
 // ---------------------------------------------------------------------------
@@ -730,6 +747,7 @@ void MainWindow::updateStatus() {
     const std::wstring title = std::wstring(str::kAppName) + str::kTitleSep + text;
     tray_.setTip(title);
     SetWindowTextW(hwnd_, title.c_str());
+    updateVideoTitle();
 }
 
 void MainWindow::updateButtons() {
@@ -750,6 +768,8 @@ void MainWindow::updateButtons() {
 void MainWindow::applyAlwaysOnTop() {
     SetWindowPos(hwnd_, cfg_.alwaysOnTop ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0,
                  SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    // M1 could only do this to the control panel; the picture is ours now (PHASE2-M2-SPEC).
+    video_.setAlwaysOnTop(cfg_.alwaysOnTop);
 }
 
 void MainWindow::saveWindowRect() {
@@ -760,6 +780,66 @@ void MainWindow::saveWindowRect() {
     cfg_.y = r.top;
     cfg_.w = r.right - r.left;
     cfg_.h = r.bottom - r.top;
+}
+
+// --- the picture (docs/PHASE2-M2-SPEC.md) ----------------------------------------------
+
+void MainWindow::updateVideoTitle() {
+    if (!video_.hasGuest()) return;
+    std::wstring t = str::kAppName;
+    if (!clientName_.empty()) t += std::wstring(str::kTitleSep) + clientName_;
+    if (!resolutionText_.empty()) t += L" · " + resolutionText_;
+    video_.setTitle(t);
+}
+
+void MainWindow::pollVideoWindow() {
+    if (video_.hasGuest()) {
+        if (video_.guestAlive()) return;
+        // The receiver tore its window down: mirroring stopped, though the session may well
+        // still be up. Hide ours and keep looking - the next stream gets adopted too.
+        video_.release();
+        resolutionText_.clear();
+        logUi(L"video: the receiver closed its window");
+        updateStatus();
+        return;
+    }
+    if (!cfg_.embedVideo || embedSuspended_ || !host_.isRunning()) return;
+
+    HWND guest = findReceiverVideoWindow(host_.pid());
+    if (!guest) return;
+    if (!video_.adopt(guest)) {
+        // Do not fight it every 300 ms; the picture stays in the receiver own window.
+        embedSuspended_ = true;
+        logUi(L"video: the receiver window would not move, leaving it on the desktop");
+        return;
+    }
+
+    // The sink sizes its window to the video, so this is the source resolution - and it
+    // arrives without -d, which in M1 was the only way to learn it at all.
+    const SIZE src = video_.sourceSize();
+    wchar_t b[64];
+    _snwprintf(b, 64, L"%d×%d", static_cast<int>(src.cx), static_cast<int>(src.cy));
+    resolutionText_ = b;
+    wchar_t note[96];
+    _snwprintf(note, 96, L"video: adopted the receiver window (%dx%d)",
+               static_cast<int>(src.cx), static_cast<int>(src.cy));
+    logUi(note);
+    updateStatus();
+    updateVideoTitle();
+}
+
+void MainWindow::applyEmbedSetting() {
+    if (cfg_.embedVideo) {
+        embedSuspended_ = false;
+        if (host_.isRunning()) SetTimer(hwnd_, kEmbedTimer, 300, nullptr);
+    } else {
+        releaseVideo();
+    }
+}
+
+void MainWindow::releaseVideo() {
+    if (hwnd_) KillTimer(hwnd_, kEmbedTimer);
+    video_.release();
 }
 
 // ---------------------------------------------------------------------------
@@ -816,6 +896,9 @@ void MainWindow::doStart() {
         return;
     }
 
+    embedSuspended_ = false;
+    if (cfg_.embedVideo) SetTimer(hwnd_, kEmbedTimer, 300, nullptr);
+
     state_ = host_.state();
     updateStatus();
     updateButtons();
@@ -827,6 +910,9 @@ void MainWindow::doStop() {
     state_ = airplay::HostState::Stopping;
     updateStatus();
     updateButtons();
+    // Before the child dies: its window is a child of ours, and Windows would destroy it
+    // along with ours if the order were the other way round.
+    releaseVideo();
     host_.stop();
     state_ = host_.state();
     updateStatus();
@@ -856,6 +942,7 @@ void MainWindow::doExit() {
     exiting_ = true;
     configFromControls();
     saveWindowRect();
+    releaseVideo();      // also writes the picture window position into the config
     store_.save(cfg_);
     host_.setCallback(nullptr);
     host_.stop();
@@ -891,10 +978,12 @@ void MainWindow::onHostEvent(const airplay::HostEvent& ev) {
                 clientName_.clear();
                 clientModel_.clear();
             }
-            if (state_ == airplay::HostState::Stopped) {
+            if (state_ == airplay::HostState::Stopped ||
+                state_ == airplay::HostState::Error) {
                 clientName_.clear();
                 clientModel_.clear();
                 resolutionText_.clear();
+                releaseVideo();
             }
             updateStatus();
             updateButtons();
@@ -995,6 +1084,20 @@ void MainWindow::onCommand(int id, int code) {
             cfg_.autostartReceiver = isChecked(chkAutostart_);
             store_.save(cfg_);
             break;
+        case IDC_CHK_EMBED:
+            cfg_.embedVideo = isChecked(chkEmbed_);
+            applyEmbedSetting();
+            store_.save(cfg_);
+            break;
+        case IDC_CHK_LOGON: {
+            const bool want = isChecked(chkLogon_);
+            const bool ok   = setLaunchAtLogon(want);
+            // Show what actually happened, not what was asked for.
+            setChecked(chkLogon_, isLaunchAtLogon());
+            logUi(ok ? (want ? L"logon: enabled" : L"logon: disabled")
+                     : L"logon: could not write the HKCU Run value");
+            break;
+        }
         case kTrayShow:
             ShowWindow(hwnd_, IsIconic(hwnd_) ? SW_RESTORE : SW_SHOW);
             SetForegroundWindow(hwnd_);
@@ -1069,6 +1172,11 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
                     delete copy;
             });
 
+            video_.setOnClosed([this]() {
+                embedSuspended_ = true;
+                logUi(L"video: picture window closed, the receiver keeps its own");
+            });
+
             applyAlwaysOnTop();
             updateStatus();
             updateButtons();
@@ -1080,6 +1188,8 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
             if (wp == kUpdateTimer) {
                 KillTimer(hwnd_, kUpdateTimer);
                 startUpdateCheck(false);
+            } else if (wp == kEmbedTimer) {
+                pollVideoWindow();
             }
             return 0;
 
@@ -1170,8 +1280,9 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
                            lblVideo_, cmbVideo_, lblAudio_, cmbAudio_, lblFps_, cmbFps_,
                            lblDecoder_, cmbDecoder_, lblReset_, cmbReset_,
                            chkFullscreen_,
-                           chkH265_, chkDebug_, chkAlwaysOnTop_, chkAutostart_,
-                           btnToggle_, btnCopy_, secAdvanced_, secDetails_, listLog_})
+                           chkH265_, chkDebug_, chkAlwaysOnTop_, chkAutostart_, chkEmbed_,
+                           chkLogon_, btnToggle_, btnCopy_, secAdvanced_, secDetails_,
+                           listLog_})
                 if (h) SendMessageW(h, WM_SETFONT, reinterpret_cast<WPARAM>(fontUi_), TRUE);
             if (status_)
                 SendMessageW(status_, WM_SETFONT, reinterpret_cast<WPARAM>(fontStatus_), TRUE);
@@ -1202,12 +1313,14 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
         case WM_ENDSESSION:
             if (wp) {
                 host_.setCallback(nullptr);
+                releaseVideo();
                 host_.stop();
             }
             return 0;
 
         case WM_DESTROY:
             host_.setCallback(nullptr);
+            releaseVideo();
             host_.stop();
             tray_.remove();
             log_.setListBox(nullptr);

@@ -10,6 +10,7 @@
 #include "config_store.h"
 #include "tray.h"
 #include "ui_log.h"
+#include "video_window.h"
 
 namespace ui {
 
@@ -52,6 +53,14 @@ private:
     void controlsFromConfig();
     void configFromControls();
 
+    // --- the picture (docs/PHASE2-M2-SPEC.md) --------------------------------
+    // The receiver only creates its video window once frames arrive, and destroys it when
+    // they stop, so adoption is a poll rather than an event.
+    void pollVideoWindow();
+    void applyEmbedSetting();     // the checkbox changed while the receiver may be running
+    void releaseVideo();          // hand the picture back; always before stopping the child
+    void updateVideoTitle();
+
     void onHostEvent(const airplay::HostEvent& ev);
     void onCommand(int id, int code);
 
@@ -83,6 +92,7 @@ private:
     HWND lblReset_ = nullptr, cmbReset_ = nullptr;
     HWND chkFullscreen_ = nullptr, chkH265_ = nullptr, chkDebug_ = nullptr;
     HWND chkAlwaysOnTop_ = nullptr, chkAutostart_ = nullptr;
+    HWND chkEmbed_ = nullptr, chkLogon_ = nullptr;
     HWND btnToggle_ = nullptr, btnCopy_ = nullptr;   // one button: Start <-> Stop
     HWND secAdvanced_ = nullptr, secDetails_ = nullptr;   // collapsible section headers
     HWND listLog_ = nullptr;
@@ -97,8 +107,10 @@ private:
     airplay::UxplayHost host_;
     UiLog log_;
     Tray  tray_;
+    VideoWindow video_;
 
     static constexpr UINT_PTR kUpdateTimer = 1;   // one shot, 4 s after the window is up
+    static constexpr UINT_PTR kEmbedTimer  = 2;   // 300 ms, while the receiver runs
 
     airplay::HostState state_ = airplay::HostState::Stopped;
     int   currentFps_     = 0;   // last non-zero submitSurfaceFPS, shown in the status line
@@ -107,6 +119,8 @@ private:
     std::wstring clientName_, clientModel_, lastError_, ipv4_;
     std::wstring resolutionText_;   // "1920x1080", only ever filled when debug=true
     bool  exiting_        = false;
+    // The user closed the picture window: it is theirs again for the rest of this session.
+    bool  embedSuspended_ = false;
     UINT  taskbarCreated_ = 0;
 };
 
