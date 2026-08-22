@@ -39,6 +39,29 @@ Her satır: `[ ]` bekliyor · `[x] YYYY-MM-DD` doğrulandı · `[!]` başarısı
 - [ ] Start/Stop/Reconnect döngüsü 5 kez sorunsuz
 - [ ] Ayarlar `%APPDATA%\airplay\config.ini`'ye yazılıyor ve yeniden açılışta korunuyor
 
+## Phase 2 M2 — Görüntü kendi penceremizde (`docs/PHASE2-M2-SPEC.md`)
+Ajan tarafı doğrulandı: `app/tests/test_embed_live.cpp` gerçek `d3d11videosink` penceresini
+bulup evlat ediniyor, oranı koruyor, geri veriyor — 15/15 PASS (2026-08-22, videotestsrc ile).
+Aşağıdakiler yalnız iPhone ile görülebilir:
+- [ ] iPhone bağlanınca görüntü **uygulamanın penceresinde** açılıyor (masaüstünde ayrı
+      "Direct3D11 renderer" penceresi kalmıyor)
+- [ ] Pencere kenarından boyutlandırınca en-boy oranı kilitli, görüntü bozulmuyor, siyah
+      bantlar dışında artefakt yok
+- [ ] F11 (ya da Alt+Enter / çift tık / sistem menüsü) tam ekran yapıyor, Esc çıkıyor
+- [ ] `Her zaman üstte` işaretliyken görüntü penceresi de üstte kalıyor
+- [ ] Durum satırında çözünürlük **`Ayrıntılı günlük` kapalıyken** görünüyor
+- [ ] Durum satırında bit hızı (`· 12.5 Mbps`) ve kare hızı görünüyor, makul değerler
+- [ ] iPhone'dan yansıtmayı durdur → görüntü penceresi kendiliğinden kapanıyor, durum
+      "Hazır"a dönüyor; tekrar bağlanınca pencere yeniden açılıyor
+- [ ] Durdur → görüntü penceresi kapanıyor, masaüstünde yetim pencere kalmıyor
+- [ ] Görüntü penceresini X ile kapat → oturum devam ediyor, görüntü alıcının kendi
+      penceresine dönüyor (o oturumda tekrar içeri alınmıyor)
+- [ ] `Görüntüyü uygulamada göster` kutusunu yansıtma sürerken kapat → görüntü anında
+      alıcının kendi penceresine dönüyor; tekrar aç → geri alınıyor
+- [ ] Görüntü penceresinin konumu/boyutu kapanışta hatırlanıyor (`[video]` bölümü)
+- [ ] `Windows açılışında başlat` işaretle → oturumu kapat/aç → uygulama bildirim alanında
+      açılıyor (pencere açılmıyor); kutuyu kaldır → bir daha açılmıyor
+
 ## Phase 3 — Paket
 - [ ] MSYS2 kurulu olmayan temiz bir Windows'ta self-contained klasör çalışıyor
 - [ ] Autostart açıkken oturum açılışında başlıyor
