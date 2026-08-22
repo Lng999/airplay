@@ -25,4 +25,21 @@ target_include_directories(airplay_host_live PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
 target_compile_options(airplay_host_live PRIVATE -Wall -Wextra)
 set_target_properties(airplay_host_live PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
 
+# ---- live test: the cross-process window surgery behind embed_video ------------------------------
+# Stands a gst-launch videotestsrc pipeline in for the receiver and adopts its window, so it needs
+# GStreamer on disk and a GPU that can present. Also not registered with add_test():
+#   ./build-app/tests/airplay_embed_live.exe [C:/msys64/ucrt64/bin/gst-launch-1.0.exe]
+add_executable(airplay_embed_live
+    test_embed_live.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui/video_embed.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui/video_window.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui/config_store.cpp)
+target_link_libraries(airplay_embed_live PRIVATE airplay_host shell32 ole32 user32 gdi32)
+target_include_directories(airplay_embed_live PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include)
+target_compile_options(airplay_embed_live PRIVATE -Wall -Wextra)
+target_link_options(airplay_embed_live PRIVATE -municode -static)
+set_target_properties(airplay_embed_live PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
+
 add_test(NAME airplay_host_tests COMMAND airplay_host_tests)
