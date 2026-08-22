@@ -62,6 +62,23 @@ Aşağıdakiler yalnız iPhone ile görülebilir:
 - [ ] `Windows açılışında başlat` işaretle → oturumu kapat/aç → uygulama bildirim alanında
       açılıyor (pencere açılmıyor); kutuyu kaldır → bir daha açılmıyor
 
+## Cihaz çerçevesi (`docs/PHASE2-M2-SPEC.md` §2b)
+Ajan tarafı doğrulandı: `airplay_frame_tests` (tablo + geometri) ve `airplay_embed_live`
+(gerçek d3d11videosink üzerinde gövde + çentik oyuğu + kırpma, kendi çektiği ekran
+görüntüsüyle) — 2026-08-22, yeşil. Model tanımlayıcısının geldiği de eski logdan doğrulandı
+(`iPhone14,5`). iPhone gerektirenler:
+- [ ] Bağlanınca çerçeve çıkıyor ve **iPhone 13'e benziyor**: çentik üstte, ekrandan oyulmuş
+      görünüyor, köşeler yuvarlak
+- [ ] Durum satırında model **"iPhone 13"** yazıyor (`iPhone14,5` değil)
+- [ ] Görüntü telefondaki ile aynı — kenarlardan kırpılmış ya da esnetilmiş değil
+      (**önemli:** akışın bantlı gelip gelmediği burada anlaşılacak; günlükteki
+      `video: adopted the receiver window (WxH)` satırını not et)
+- [ ] Telefonu yan çevir → çerçeve de yan dönüyor. Dönmüyorsa `R` tuşu düzeltiyor mu?
+- [ ] `Telefon çerçevesi çiz` kutusunu kapat → düz görüntüye dönüyor, tekrar aç → çerçeve
+      geri geliyor (yansıtma sürerken)
+- [ ] Tam ekranda (F11) çerçeve düzgün büyüyor, oyuk yerinde kalıyor
+- [ ] Pencereyi boyutlandırınca çerçeve oranı kilitli, oyuk kaymıyor
+
 ## Phase 3 — Paket
 - [ ] MSYS2 kurulu olmayan temiz bir Windows'ta self-contained klasör çalışıyor
 - [ ] Autostart açıkken oturum açılışında başlıyor
