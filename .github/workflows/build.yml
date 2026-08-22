@@ -80,6 +80,15 @@ jobs:
           # uxplay.cpp:1385-1387 -- "-v" prints the version and exit(0)s, it does not start the server.
           ./build/uxplay.exe -v
 
+      # The GUI links -static against system DLLs only, so it builds in the same shell and
+      # needs nothing from GStreamer. This also builds the two live tests (not run here:
+      # one opens sockets on the LAN, the other needs a GPU that can present).
+      - name: Build the GUI (scripts/build-app.sh)
+        run: bash scripts/build-app.sh
+
+      - name: Unit tests (line parser + argv builder)
+        run: ctest --test-dir build-app --output-on-failure
+
       # BEST-EFFORT BUNDLING (Phase 3 work is not done here):
       # ntldd -R resolves only the direct/transitive deps of uxplay.exe itself.
       # The GStreamer plugin DLLs copied below are NOT walked for their own
