@@ -2,7 +2,7 @@
 
 Windows 11 için kişisel kullanımlık AirPlay Screen Mirroring alıcısı. Üst proje: [UxPlay](https://github.com/FDH2/UxPlay) (GPLv3).
 
-Durum (2026-08-20): Phase 0 tamam (MSYS2/UCRT64 build + duman testi yeşil), Phase 2 M1 GUI derleniyor ve çalışıyor; **iPhone 13 → Windows 10 mirroring doğrulandı (2026-08-21)** — upstream dahili mDNS'in Windows'ta 127.0.0.1 ilan etme hatası `patches/0001` ile düzeltildi. Bkz. `docs/SPEC.md`, `docs/BUILD-NOTES.md`, `docs/MANUAL-VERIFY.md`.
+Durum (2026-08-22): Phase 0 tamam (MSYS2/UCRT64 build + duman testi yeşil), **iPhone 13 → Windows 10 mirroring doğrulandı (2026-08-21)** — upstream dahili mDNS'in Windows'ta 127.0.0.1 ilan etme hatası `patches/0001` ile düzeltildi. Phase 2 **M2** bitti: görüntü artık uygulamanın kendi penceresinde (alıcının penceresi `SetParent` ile evlat ediniliyor), en-boy oranı kilitli boyutlandırma, F11 tam ekran, durum satırında çözünürlük + bit hızı + kare hızı. Phase 3'ten Windows açılışında başlatma da eklendi. Bkz. `docs/SPEC.md`, `docs/PHASE2-M2-SPEC.md`, `docs/BUILD-NOTES.md`, `docs/MANUAL-VERIFY.md`.
 
 Tek tıkla çalıştırma: **`AirPlay.bat`** (çift tıkla; parametre geçirilebilir: `AirPlay.bat -Name "Salon-PC" -Debug`).
 
