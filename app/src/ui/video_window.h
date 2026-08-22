@@ -9,6 +9,7 @@
 #include <string>
 
 #include "config_store.h"
+#include "device_frames.h"
 #include "video_embed.h"
 
 namespace ui {
@@ -32,6 +33,15 @@ public:
     SIZE sourceSize() const { return adopted_.source; }
     HWND hwnd()       const { return hwnd_; }
 
+    // Who is mirroring, from HostEvent::clientModel ("iPhone14,5"). Decides whether a
+    // device frame is drawn at all and what shape its cut-out has.
+    void setDevice(const std::wstring& model);
+    void setFrameEnabled(bool on);
+    bool frameActive() const;
+    // Only meaningful when the stream carries bars: they look the same whichever way the
+    // phone is held, so the user gets to say.
+    void toggleRotation();
+
     void setAlwaysOnTop(bool on);
     void setTitle(const std::wstring& text);
     void setFullscreen(bool on);
@@ -50,6 +60,12 @@ private:
 
     bool ensureWindow();
     void layoutGuest();
+    void layoutPlain();          // letterbox, no frame - milestone 2 behaviour
+    void layoutFramed();         // device frame: crop, place, clip
+    void applyGuestRegion();     // rounded screen corners and the notch/island cut-out
+    void clearGuestRegion();
+    void paintFrame(HDC dc, const RECT& client);
+    double effectiveAspect() const;   // what the window should keep while resizing
     void sizeToSource();
     void constrainSizing(WPARAM edge, RECT* r) const;
     SIZE frameExtra() const;   // window size minus client size, for the current style
@@ -59,6 +75,13 @@ private:
 
     HWND          hwnd_ = nullptr;
     AdoptedWindow adopted_{};
+
+    // --- device frame ---
+    std::wstring   deviceModel_;
+    DeviceProfile  device_{};
+    bool           wantsFrame_ = false;    // the model is a phone/tablet we can draw
+    bool           landscapeHint_ = false; // user's answer when the stream is ambiguous
+    FrameGeometry  geom_{};                // last computed layout, for WM_PAINT
     bool          fullscreen_ = false;
     WINDOWPLACEMENT prevPlacement_{};   // saved across a fullscreen switch
     LONG_PTR        prevStyle_ = 0;

@@ -1,6 +1,7 @@
 #include "video_window.h"
 
 #include <algorithm>
+#include <cmath>
 
 #include "../res/resource.h"
 #include "strings.h"
@@ -15,6 +16,16 @@ const wchar_t* const kClass = L"AirplayVideoWindow";
 constexpr int kSysFullscreen = 0x1000;
 
 constexpr int kMinClient = 160;
+
+// The rotate entry, next to fullscreen in the window's own system menu.
+constexpr int kSysRotate = 0x1010;
+
+// The phone. Deliberately not black-on-black: the body has to read as an object sitting on
+// the backdrop, and the cut-out has to read as a hole in the picture.
+constexpr COLORREF kBackdrop = RGB(0x0a, 0x0a, 0x0c);
+constexpr COLORREF kBody     = RGB(0x1c, 0x1c, 0x20);
+constexpr COLORREF kBodyEdge = RGB(0x3c, 0x3c, 0x44);
+constexpr COLORREF kCutout   = RGB(0x00, 0x00, 0x00);
 
 } // namespace
 
@@ -61,6 +72,7 @@ bool VideoWindow::ensureWindow() {
     if (HMENU sys = GetSystemMenu(hwnd_, FALSE)) {
         AppendMenuW(sys, MF_SEPARATOR, 0, nullptr);
         AppendMenuW(sys, MF_STRING, kSysFullscreen, str::kVideoFullscreenMenu);
+        AppendMenuW(sys, MF_STRING, kSysRotate, str::kVideoRotateMenu);
     }
     return true;
 }
@@ -82,13 +94,47 @@ bool VideoWindow::adopt(HWND guest) {
 
 void VideoWindow::release() {
     if (!adopted_.valid()) return;
+    clearGuestRegion();
     AdoptedWindow a = adopted_;
     adopted_ = AdoptedWindow{};
+    geom_ = FrameGeometry{};
     releaseWindow(a);
     if (hwnd_) {
         saveRect();
         ShowWindow(hwnd_, SW_HIDE);
     }
+}
+
+void VideoWindow::setDevice(const std::wstring& model) {
+    if (model == deviceModel_) return;
+    deviceModel_ = model;
+    device_ = lookupDevice(model);
+    wantsFrame_ = deviceWantsFrame(model);
+    landscapeHint_ = false;
+    if (hwnd_) {
+        layoutGuest();
+        InvalidateRect(hwnd_, nullptr, TRUE);
+    }
+}
+
+void VideoWindow::setFrameEnabled(bool on) {
+    if (cfg_.deviceFrame == on) return;
+    cfg_.deviceFrame = on;
+    if (!hwnd_) return;
+    if (!on) clearGuestRegion();
+    layoutGuest();
+    InvalidateRect(hwnd_, nullptr, TRUE);
+}
+
+bool VideoWindow::frameActive() const {
+    return cfg_.deviceFrame && wantsFrame_ && adopted_.source.cx > 0;
+}
+
+void VideoWindow::toggleRotation() {
+    landscapeHint_ = !landscapeHint_;
+    if (!hwnd_) return;
+    layoutGuest();
+    InvalidateRect(hwnd_, nullptr, TRUE);
 }
 
 // ---------------------------------------------------------------------------
@@ -121,13 +167,24 @@ void VideoWindow::sizeToSource() {
         cw = cfg_.vw - extra.cx;
         ch = cfg_.vh - extra.cy;
     }
+    // With a frame on, the window follows the phone's shape, not the stream's - a portrait
+    // screen inside a 16:9 stream would otherwise open as a wide window with a tiny phone
+    // in the middle.
+    const double framed = effectiveAspect();
+    if (framed > 0.0) {
+        const double area = static_cast<double>(cw) * ch;
+        ch = static_cast<int>(std::sqrt(area / framed));
+        cw = static_cast<int>(ch * framed);
+    }
     // Never larger than 85% of the work area, and always at the source aspect.
     const int maxW = static_cast<int>(workW * 0.85), maxH = static_cast<int>(workH * 0.85);
     double scale = 1.0;
     if (cw > maxW) scale = static_cast<double>(maxW) / cw;
     if (ch > maxH) scale = (std::min)(scale, static_cast<double>(maxH) / ch);
     cw = static_cast<int>(cw * scale);
-    ch = static_cast<int>(cw * static_cast<double>(sh) / sw + 0.5);
+    const double aspect = effectiveAspect() > 0.0 ? effectiveAspect()
+                                                  : static_cast<double>(sw) / sh;
+    ch = static_cast<int>(cw / aspect + 0.5);
     if (cw < kMinClient) cw = kMinClient;
     if (ch < kMinClient / 2) ch = kMinClient / 2;
 
@@ -142,21 +199,139 @@ void VideoWindow::sizeToSource() {
 
 void VideoWindow::layoutGuest() {
     if (!hwnd_ || !guestAlive()) return;
+    if (frameActive())
+        layoutFramed();
+    else
+        layoutPlain();
+}
+
+void VideoWindow::layoutPlain() {
     RECT rc{};
     GetClientRect(hwnd_, &rc);
     const int cw = rc.right, ch = rc.bottom;
     if (cw <= 0 || ch <= 0) return;
 
+    geom_ = FrameGeometry{};
+    clearGuestRegion();
+
     const int sw = adopted_.source.cx > 0 ? adopted_.source.cx : cw;
     const int sh = adopted_.source.cy > 0 ? adopted_.source.cy : ch;
 
-    // Letterbox: the guest keeps the source aspect, the black class brush fills the rest.
+    // Letterbox: the guest keeps the source aspect, the black backdrop fills the rest.
     const double scale = (std::min)(static_cast<double>(cw) / sw, static_cast<double>(ch) / sh);
     int w = static_cast<int>(sw * scale + 0.5), h = static_cast<int>(sh * scale + 0.5);
     if (w < 1) w = 1;
     if (h < 1) h = 1;
     SetWindowPos(adopted_.hwnd, nullptr, (cw - w) / 2, (ch - h) / 2, w, h,
                  SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
+void VideoWindow::layoutFramed() {
+    RECT rc{};
+    GetClientRect(hwnd_, &rc);
+    const SIZE client{rc.right, rc.bottom};
+    geom_ = layoutDeviceFrame(client, adopted_.source, device_, landscapeHint_);
+    if (!geom_.valid) {
+        layoutPlain();
+        return;
+    }
+    SetWindowPos(adopted_.hwnd, nullptr, geom_.guest.left, geom_.guest.top,
+                 geom_.guest.right - geom_.guest.left, geom_.guest.bottom - geom_.guest.top,
+                 SWP_NOZORDER | SWP_NOACTIVATE);
+    applyGuestRegion();
+    InvalidateRect(hwnd_, nullptr, TRUE);
+}
+
+// The region is what makes this more than a picture in a box: it clips the guest to the
+// screen rectangle (dropping any pillarbox the phone baked in), rounds the display corners
+// and punches the notch or the Dynamic Island out of the picture, so the body we paint
+// underneath shows through. Cross-process SetWindowRgn is allowed - measured, see
+// docs/PHASE2-M2-SPEC.md - but it is in window coordinates, so every resize re-applies it.
+void VideoWindow::applyGuestRegion() {
+    if (!guestAlive() || !geom_.valid) return;
+
+    const RECT& clip = geom_.guestClip;
+    HRGN rgn = CreateRoundRectRgn(clip.left, clip.top, clip.right + 1, clip.bottom + 1,
+                                  geom_.screenRadius * 2, geom_.screenRadius * 2);
+    if (!rgn) return;
+
+    const int cutW = geom_.cutout.right - geom_.cutout.left;
+    const int cutH = geom_.cutout.bottom - geom_.cutout.top;
+    if (cutW > 0 && cutH > 0) {
+        // client coordinates -> the guest's own
+        RECT c{geom_.cutout.left - geom_.guest.left, geom_.cutout.top - geom_.guest.top,
+               geom_.cutout.right - geom_.guest.left, geom_.cutout.bottom - geom_.guest.top};
+        // A notch is attached to the edge: only its far two corners are round, which is what
+        // pushing the near end outside the screen rect achieves.
+        if (geom_.cutoutAtEdge) {
+            if (geom_.landscape)
+                c.left -= geom_.cutoutRadius * 2;
+            else
+                c.top -= geom_.cutoutRadius * 2;
+        }
+        HRGN hole = CreateRoundRectRgn(c.left, c.top, c.right + 1, c.bottom + 1,
+                                       geom_.cutoutRadius * 2, geom_.cutoutRadius * 2);
+        if (hole) {
+            CombineRgn(rgn, rgn, hole, RGN_DIFF);
+            DeleteObject(hole);
+        }
+    }
+    // The window takes ownership of the region; do not delete it here.
+    if (!SetWindowRgn(adopted_.hwnd, rgn, TRUE)) DeleteObject(rgn);
+}
+
+void VideoWindow::clearGuestRegion() {
+    if (guestAlive()) SetWindowRgn(adopted_.hwnd, nullptr, TRUE);
+}
+
+double VideoWindow::effectiveAspect() const {
+    if (!frameActive()) return 0.0;
+    // geom_ knows the orientation actually in use; before the first layout, guess from the
+    // stream the same way layoutDeviceFrame will.
+    const bool landscape = geom_.valid ? geom_.landscape : landscapeHint_;
+    return frameAspect(device_, landscape);
+}
+
+void VideoWindow::paintFrame(HDC dc, const RECT& client) {
+    HBRUSH back = CreateSolidBrush(kBackdrop);
+    FillRect(dc, &client, back);
+    DeleteObject(back);
+
+    if (!geom_.valid) return;
+
+    HBRUSH body = CreateSolidBrush(kBody);
+    HPEN   edge = CreatePen(PS_SOLID, 1, kBodyEdge);
+    HGDIOBJ oldB = SelectObject(dc, body);
+    HGDIOBJ oldP = SelectObject(dc, edge);
+    RoundRect(dc, geom_.body.left, geom_.body.top, geom_.body.right, geom_.body.bottom,
+              geom_.bodyRadius * 2, geom_.bodyRadius * 2);
+    SelectObject(dc, oldB);
+    SelectObject(dc, oldP);
+    DeleteObject(body);
+    DeleteObject(edge);
+
+    // The hole in the picture is the darkest thing on screen, like the real one.
+    const int cutW = geom_.cutout.right - geom_.cutout.left;
+    const int cutH = geom_.cutout.bottom - geom_.cutout.top;
+    if (cutW > 0 && cutH > 0) {
+        RECT c = geom_.cutout;
+        if (geom_.cutoutAtEdge) {
+            if (geom_.landscape)
+                c.left -= geom_.cutoutRadius * 2;
+            else
+                c.top -= geom_.cutoutRadius * 2;
+        }
+        HBRUSH cut = CreateSolidBrush(kCutout);
+        HPEN   cutPen = CreatePen(PS_SOLID, 1, kCutout);
+        oldB = SelectObject(dc, cut);
+        oldP = SelectObject(dc, cutPen);
+        RoundRect(dc, c.left, c.top, c.right + 1, c.bottom + 1, geom_.cutoutRadius * 2,
+                  geom_.cutoutRadius * 2);
+        SelectObject(dc, oldB);
+        SelectObject(dc, oldP);
+        DeleteObject(cut);
+        DeleteObject(cutPen);
+    }
 }
 
 void VideoWindow::constrainSizing(WPARAM edge, RECT* r) const {
@@ -167,7 +342,9 @@ void VideoWindow::constrainSizing(WPARAM edge, RECT* r) const {
     if (cw < kMinClient) cw = kMinClient;
     if (ch < kMinClient / 2) ch = kMinClient / 2;
 
-    const double ar = static_cast<double>(adopted_.source.cx) / adopted_.source.cy;
+    const double framed = effectiveAspect();
+    const double ar = framed > 0.0 ? framed
+                                   : static_cast<double>(adopted_.source.cx) / adopted_.source.cy;
     if (edge == WMSZ_TOP || edge == WMSZ_BOTTOM) {
         cw = static_cast<int>(ch * ar + 0.5);
     } else {
@@ -278,6 +455,7 @@ LRESULT VideoWindow::wndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_KEYDOWN:
             if (wp == VK_F11) { setFullscreen(!fullscreen_); return 0; }
             if (wp == VK_ESCAPE && fullscreen_) { setFullscreen(false); return 0; }
+            if (wp == 'R') { toggleRotation(); return 0; }
             break;
 
         case WM_SYSKEYDOWN:
@@ -290,7 +468,29 @@ LRESULT VideoWindow::wndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
         case WM_SYSCOMMAND:
             if ((wp & 0xFFF0) == kSysFullscreen) { setFullscreen(!fullscreen_); return 0; }
+            if ((wp & 0xFFF0) == kSysRotate) { toggleRotation(); return 0; }
             break;
+
+        // The guest covers the screen rect, so all this paints is the backdrop and the body
+        // around and behind it - including whatever shows through the cut-out.
+        case WM_ERASEBKGND:
+            return 1;
+
+        case WM_PAINT: {
+            PAINTSTRUCT ps{};
+            HDC dc = BeginPaint(hwnd, &ps);
+            RECT rc{};
+            GetClientRect(hwnd, &rc);
+            if (frameActive() && geom_.valid) {
+                paintFrame(dc, rc);
+            } else {
+                HBRUSH b = CreateSolidBrush(RGB(0, 0, 0));
+                FillRect(dc, &rc, b);
+                DeleteObject(b);
+            }
+            EndPaint(hwnd, &ps);
+            return 0;
+        }
 
         case WM_CLOSE:
             // Closing the picture must not close the session. The guest goes back to being
