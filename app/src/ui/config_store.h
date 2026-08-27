@@ -60,6 +60,7 @@ struct AppConfig {
     bool         showAdvanced      = false;   // collapsible sections, see PHASE2-UX-SPEC
     bool         showDetails       = false;
     bool         trayHintShown     = false;   // the "still running in the tray" balloon
+    bool         pictureHintShown  = false;   // the "picture hidden, still mirroring" balloon
     bool         autoUpdate        = true;    // check GitHub for a newer release at startup
     // Take the receiver's video window into a window of ours (docs/PHASE2-M2-SPEC.md).
     // Off means milestone-1 behaviour: the picture is uxplay.exe's own top-level window.

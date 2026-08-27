@@ -120,7 +120,7 @@ private:
     std::wstring clientName_, clientModel_, lastError_, ipv4_;
     std::wstring resolutionText_;   // "1920x1080", only ever filled when debug=true
     bool  exiting_        = false;
-    // The user closed the picture window: it is theirs again for the rest of this session.
+    // adoptWindow() refused to move the receiver's window; stop trying for this session.
     bool  embedSuspended_ = false;
     UINT  taskbarCreated_ = 0;
 };

@@ -28,6 +28,14 @@ public:
     // when the guest has already been destroyed by the receiver.
     void release();
 
+    // The user closed the picture. Unlike release(), the guest stays adopted - a child of
+    // our now-hidden window - so the receiver's own window does not pop back onto the
+    // desktop, which is what made a close look like a reopen. The session carries on.
+    void hide();
+    // Bring a hidden picture back (tray menu, or the embed setting turned on again).
+    void showPicture();
+    bool isHidden() const { return hidden_; }
+
     bool hasGuest()   const { return adopted_.valid(); }
     bool guestAlive() const { return adopted_.valid() && IsWindow(adopted_.hwnd); }
     SIZE sourceSize() const { return adopted_.source; }
@@ -75,6 +83,8 @@ private:
 
     HWND          hwnd_ = nullptr;
     AdoptedWindow adopted_{};
+    // Closed by the user while the guest is still ours; see hide().
+    bool          hidden_ = false;
 
     // --- device frame ---
     std::wstring   deviceModel_;

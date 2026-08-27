@@ -205,6 +205,7 @@ void ConfigStore::load(AppConfig& cfg) const {
     cfg.showAdvanced      = readBool(f, L"app", L"show_advanced",      cfg.showAdvanced);
     cfg.showDetails       = readBool(f, L"app", L"show_details",       cfg.showDetails);
     cfg.trayHintShown     = readBool(f, L"app", L"tray_hint_shown",    cfg.trayHintShown);
+    cfg.pictureHintShown  = readBool(f, L"app", L"picture_hint_shown", cfg.pictureHintShown);
     cfg.autoUpdate        = readBool(f, L"app", L"auto_update",        cfg.autoUpdate);
     cfg.embedVideo        = readBool(f, L"app", L"embed_video",        cfg.embedVideo);
     cfg.deviceFrame       = readBool(f, L"app", L"device_frame",       cfg.deviceFrame);
@@ -267,6 +268,7 @@ void ConfigStore::save(const AppConfig& cfg) const {
     writeInt(f, L"app", L"show_advanced",      cfg.showAdvanced ? 1 : 0);
     writeInt(f, L"app", L"show_details",       cfg.showDetails ? 1 : 0);
     writeInt(f, L"app", L"tray_hint_shown",    cfg.trayHintShown ? 1 : 0);
+    writeInt(f, L"app", L"picture_hint_shown", cfg.pictureHintShown ? 1 : 0);
     writeInt(f, L"app", L"auto_update",        cfg.autoUpdate ? 1 : 0);
     writeInt(f, L"app", L"embed_video",        cfg.embedVideo ? 1 : 0);
     writeInt(f, L"app", L"device_frame",       cfg.deviceFrame ? 1 : 0);

@@ -81,11 +81,12 @@ void Tray::showBalloon(const std::wstring& title, const std::wstring& text) cons
     Shell_NotifyIconW(NIM_MODIFY, &nid);
 }
 
-int Tray::trackMenu(HWND owner, bool running) const {
+int Tray::trackMenu(HWND owner, bool running, bool pictureHidden) const {
     HMENU menu = CreatePopupMenu();
     if (!menu) return kTrayNone;
 
     AppendMenuW(menu, MF_STRING, kTrayShow, str::kTrayShow);
+    if (pictureHidden) AppendMenuW(menu, MF_STRING, kTrayPicture, str::kTrayPicture);
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(menu, MF_STRING | (running ? MF_GRAYED : 0), kTrayStart, str::kTrayStart);
     AppendMenuW(menu, MF_STRING | (running ? 0 : MF_GRAYED), kTrayStop, str::kTrayStop);

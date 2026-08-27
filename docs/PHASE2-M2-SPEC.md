@@ -89,7 +89,9 @@ tam olarak bunu tarif ediyor.
 | Pencere bulundu | Evlat edinilir, görüntü penceresi gösterilir, çözünürlük durum satırına yazılır |
 | Yansıtma bitti (çocuk pencereyi yok etti) | `IsWindow` false → görüntü penceresi gizlenir, arama sürer |
 | Durdur / Çıkış / güncelleme | **Önce bırakılır** (`SetParent(nullptr)` + eski stiller), sonra çocuk durdurulur |
-| Görüntü penceresi kapatılırsa | Pencere çocuğa geri verilir (masaüstünde kendi penceresi olarak kalır), o oturumda tekrar alınmaz |
+| Görüntü penceresi kapatılırsa | Pencere **bizde kalır**, ikisi birden gizlenir. Geri getirmek: tepsi menüsünde «Görüntüyü göster» ya da «Görüntüyü uygulamada göster» kutusu |
+
+> **[DÜZELTME 2026-08-28]** Önceki davranış pencereyi çocuğa geri veriyordu; `releaseWindow()` eski stilleri geri koyup `SWP_SHOWWINDOW` ile gösteriyordu, yani kullanıcı çarpıya bastığı anda sink'in kendi penceresi masaüstünde beliriyordu — kapattığı pencere kendi kendine yeniden açılmış gibi görünüyordu. Artık `hide()` evlat edinmeyi bozmadan gizliyor: gizli bir ebeveynin çocuğu çizilmez, oturum ve ses sürer. Regresyon testi: `airplay_embed_live` adım 3c.
 
 Bırakma sırası önemli: bizim pencereyi yok etmemiz, çocuk sürecin penceresini de yok eder
 (Windows çocuk pencereleri ebeveynle birlikte yıkar) ve sink bunu beklemez.

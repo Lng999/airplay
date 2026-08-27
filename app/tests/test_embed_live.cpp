@@ -206,6 +206,27 @@ int wmain(int argc, wchar_t** argv) {
         std::printf("shot -> %ls\n", shotPath);
     }
 
+    // 3c. closing the picture. The regression this guards: release() hands the guest back
+    // as a visible top-level window, so the moment the user clicked the close box the
+    // picture reappeared on the desktop - a close that looked like a reopen. Now the guest
+    // stays adopted and goes dark with us.
+    SendMessageW(video.hwnd(), WM_CLOSE, 0, 0);
+    pump(400);
+    check(video.isHidden(), "closing the picture hides it instead of releasing");
+    check(video.hasGuest(), "the guest is still ours after the close");
+    check(IsWindowVisible(video.hwnd()) == 0, "our window is hidden");
+    check(IsWindowVisible(guest) == 0, "the guest did not reappear on the desktop");
+    check(GetParent(guest) == video.hwnd(), "the guest is still a child of ours");
+
+    GetExitCodeProcess(pi.hProcess, &ec);
+    check(ec == STILL_ACTIVE, "the receiver kept running with the picture closed");
+
+    video.showPicture();
+    pump(400);
+    check(!video.isHidden(), "showPicture clears the hidden state");
+    check(IsWindowVisible(video.hwnd()) != 0, "our window is back on screen");
+    check(IsWindowVisible(guest) != 0, "the guest is visible again");
+
     // 4. hand it back
     video.release();
     pump(300);

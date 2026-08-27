@@ -14,7 +14,8 @@ enum TrayCommand : int {
     kTrayStart  = 40002,
     kTrayStop   = 40003,
     kTrayExit   = 40004,
-    kTrayUpdate = 40005
+    kTrayUpdate = 40005,
+    kTrayPicture = 40006
 };
 
 class Tray {
@@ -40,7 +41,8 @@ public:
     void showBalloon(const std::wstring& title, const std::wstring& text) const;
 
     // Blocking popup menu at the cursor; returns a TrayCommand (kTrayNone if dismissed).
-    int trackMenu(HWND owner, bool running) const;
+    // pictureHidden adds the entry that brings a closed picture window back.
+    int trackMenu(HWND owner, bool running, bool pictureHidden) const;
 
 private:
     HWND         owner_       = nullptr;

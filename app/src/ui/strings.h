@@ -15,6 +15,8 @@ inline constexpr const wchar_t* kAppName   = L"airplay";
 inline constexpr const wchar_t* kTitleSep  = L" — ";
 
 inline constexpr const wchar_t* kTrayShow  = L"Göster";
+// Only in the menu while the picture window is closed but the session is still up.
+inline constexpr const wchar_t* kTrayPicture = L"Görüntüyü göster";
 inline constexpr const wchar_t* kTrayStart = L"Başlat";
 inline constexpr const wchar_t* kTrayStop  = L"Durdur";
 inline constexpr const wchar_t* kTrayExit  = L"Çıkış";
@@ -110,6 +112,11 @@ inline constexpr const wchar_t* kTrayHintTitle  = L"airplay çalışmaya devam e
 inline constexpr const wchar_t* kTrayHintText   =
     L"Pencere kapandı ama alıcı bildirim alanında çalışıyor. Tamamen kapatmak için "
     L"simgeye sağ tıklayıp Çıkış'ı seçin.";
+// Shown once, the first time the picture window is closed while a session is up.
+inline constexpr const wchar_t* kPictureHintTitle = L"Görüntü gizlendi";
+inline constexpr const wchar_t* kPictureHintText  =
+    L"Yansıtma sürüyor, yalnızca görüntü penceresi kapandı. Geri getirmek için bildirim "
+    L"alanındaki simgeye sağ tıklayıp «Görüntüyü göster»’i seçin.";
 
 } // namespace str
 } // namespace ui

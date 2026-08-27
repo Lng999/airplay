@@ -862,6 +862,8 @@ void MainWindow::pollVideoWindow() {
 void MainWindow::applyEmbedSetting() {
     if (cfg_.embedVideo) {
         embedSuspended_ = false;
+        // Ticking the box is the second way back from a closed picture window.
+        video_.showPicture();
         if (host_.isRunning()) SetTimer(hwnd_, kEmbedTimer, 300, nullptr);
     } else {
         releaseVideo();
@@ -1157,6 +1159,10 @@ void MainWindow::onCommand(int id, int code) {
             ShowWindow(hwnd_, IsIconic(hwnd_) ? SW_RESTORE : SW_SHOW);
             SetForegroundWindow(hwnd_);
             break;
+        case kTrayPicture:
+            video_.showPicture();
+            updateStatus();
+            break;
         case kTrayStart:
             doStart();
             break;
@@ -1228,8 +1234,15 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
             });
 
             video_.setOnClosed([this]() {
-                embedSuspended_ = true;
-                logUi(L"video: picture window closed, the receiver keeps its own");
+                // The guest stays adopted and hidden with us, so nothing reappears on the
+                // desktop and pollVideoWindow() has no loose window to adopt again. Say
+                // where it went - once - the session is up and still making sound.
+                logUi(L"video: picture hidden, the session keeps running");
+                if (!cfg_.pictureHintShown) {
+                    tray_.showBalloon(str::kPictureHintTitle, str::kPictureHintText);
+                    cfg_.pictureHintShown = true;
+                }
+                updateStatus();
             });
 
             applyAlwaysOnTop();
@@ -1273,7 +1286,7 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
             switch (LOWORD(lp)) {
                 case WM_RBUTTONUP:
                 case WM_CONTEXTMENU: {
-                    int cmd = tray_.trackMenu(hwnd_, host_.isRunning());
+                    int cmd = tray_.trackMenu(hwnd_, host_.isRunning(), video_.isHidden());
                     if (cmd != kTrayNone) onCommand(cmd, 0);
                     break;
                 }

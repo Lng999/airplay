@@ -86,6 +86,7 @@ bool VideoWindow::adopt(HWND guest) {
 
     sizeToSource();
     setAlwaysOnTop(cfg_.alwaysOnTop);
+    hidden_ = false;
     ShowWindow(hwnd_, SW_SHOW);
     layoutGuest();
     if (cfg_.videoFullscreen || cfg_.fullscreen) setFullscreen(true);
@@ -93,6 +94,7 @@ bool VideoWindow::adopt(HWND guest) {
 }
 
 void VideoWindow::release() {
+    hidden_ = false;
     if (!adopted_.valid()) return;
     clearGuestRegion();
     AdoptedWindow a = adopted_;
@@ -103,6 +105,25 @@ void VideoWindow::release() {
         saveRect();
         ShowWindow(hwnd_, SW_HIDE);
     }
+}
+
+void VideoWindow::hide() {
+    if (!hwnd_) return;
+    // Leave fullscreen first, so the rect we remember is the windowed one.
+    if (fullscreen_) setFullscreen(false);
+    saveRect();
+    hidden_ = true;
+    ShowWindow(hwnd_, SW_HIDE);
+}
+
+void VideoWindow::showPicture() {
+    if (!hwnd_ || !hidden_) return;
+    hidden_ = false;
+    ShowWindow(hwnd_, SW_SHOW);
+    setAlwaysOnTop(cfg_.alwaysOnTop);
+    layoutGuest();
+    InvalidateRect(hwnd_, nullptr, TRUE);
+    SetForegroundWindow(hwnd_);
 }
 
 void VideoWindow::setDevice(const std::wstring& model) {
@@ -493,10 +514,11 @@ LRESULT VideoWindow::wndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
 
         case WM_CLOSE:
-            // Closing the picture must not close the session. The guest goes back to being
-            // its own window on the desktop; the receiver keeps mirroring into it.
-            if (fullscreen_) setFullscreen(false);
-            release();
+            // Closing the picture must not close the session - and must not hand the guest
+            // back to the desktop either: releaseWindow() restores it as a top-level window,
+            // which the user sees as the window they just closed opening itself again.
+            // Keep it adopted and hide the pair. Mirroring, audio included, carries on.
+            hide();
             if (onClosed_) onClosed_();
             return 0;
 
