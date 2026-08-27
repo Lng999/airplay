@@ -43,6 +43,23 @@ target_compile_options(airplay_embed_live PRIVATE -Wall -Wextra)
 target_link_options(airplay_embed_live PRIVATE -municode -static)
 set_target_properties(airplay_embed_live PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
 
+# ---- live test: nothing on screen between the picture leaving and the window closing -------------
+# Same needs as airplay_embed_live, same reason it is not an add_test():
+#   ./build-app/tests/airplay_release_flash.exe [C:/msys64/ucrt64/bin/gst-launch-1.0.exe]
+add_executable(airplay_release_flash
+    test_release_flash.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui/video_embed.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui/video_window.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui/device_frames.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui/config_store.cpp)
+target_link_libraries(airplay_release_flash PRIVATE airplay_host shell32 ole32 user32 gdi32)
+target_include_directories(airplay_release_flash PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include)
+target_compile_options(airplay_release_flash PRIVATE -Wall -Wextra)
+target_link_options(airplay_release_flash PRIVATE -municode -static)
+set_target_properties(airplay_release_flash PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
+
 # ---- unit tests: the device-frame table and geometry (no window, no receiver) --------------------
 add_executable(airplay_frame_tests
     test_device_frames.cpp

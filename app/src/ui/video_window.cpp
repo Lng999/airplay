@@ -96,24 +96,36 @@ bool VideoWindow::adopt(HWND guest) {
 void VideoWindow::release(bool toDesktop) {
     hidden_ = false;
     if (!adopted_.valid()) return;
+
+    // Us first, guest second. Clearing the region, hiding the guest and reparenting it are
+    // four repaints of our client area, and what they repaint is a window with the picture
+    // already gone: a black rectangle, or the device frame drawn around a hole. Hiding
+    // ourselves last left that on screen for a couple of milliseconds - a frame or two on a
+    // busy machine - which is the blink users saw after pressing Durdur. Nothing can flash
+    // inside a window that is already off screen.
+    if (hwnd_) {
+        saveRect();
+        ShowWindow(hwnd_, SW_HIDE);
+    }
+
     clearGuestRegion();
     AdoptedWindow a = adopted_;
     adopted_ = AdoptedWindow{};
     geom_ = FrameGeometry{};
     releaseWindow(a, toDesktop);
-    if (hwnd_) {
-        saveRect();
-        ShowWindow(hwnd_, SW_HIDE);
-    }
 }
 
 void VideoWindow::hide() {
     if (!hwnd_) return;
-    // Leave fullscreen first, so the rect we remember is the windowed one.
-    if (fullscreen_) setFullscreen(false);
+    // saveRect() is a no-op while fullscreen, which is what we want: the remembered rect is
+    // the windowed one, and leaving fullscreen below does not change it.
     saveRect();
-    hidden_ = true;
+    // One call, and the guest goes dark with us - it is still our child, and Windows hides a
+    // parent and its children together. Leaving fullscreen comes after, never before:
+    // SetWindowPlacement would put the window back on screen on its way out of fullscreen.
     ShowWindow(hwnd_, SW_HIDE);
+    if (fullscreen_) setFullscreen(false);
+    hidden_ = true;
 }
 
 void VideoWindow::showPicture() {
@@ -417,7 +429,11 @@ void VideoWindow::setFullscreen(bool on) {
                      SWP_FRAMECHANGED | SWP_NOOWNERZORDER);
     } else {
         SetWindowLongPtrW(hwnd_, GWL_STYLE, prevStyle_);
-        SetWindowPlacement(hwnd_, &prevPlacement_);
+        // SetWindowPlacement applies the saved showCmd, so a window that is off screen when
+        // it leaves fullscreen would come back on. Keep whatever visibility we came in with.
+        WINDOWPLACEMENT wp = prevPlacement_;
+        if (!IsWindowVisible(hwnd_)) wp.showCmd = SW_HIDE;
+        SetWindowPlacement(hwnd_, &wp);
         SetWindowPos(hwnd_, nullptr, 0, 0, 0, 0,
                      SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
         setAlwaysOnTop(cfg_.alwaysOnTop);

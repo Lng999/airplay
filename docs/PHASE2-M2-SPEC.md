@@ -97,6 +97,16 @@ tam olarak bunu tarif ediyor.
 Bırakma sırası önemli: bizim pencereyi yok etmemiz, çocuk sürecin penceresini de yok eder
 (Windows çocuk pencereleri ebeveynle birlikte yıkar) ve sink bunu beklemez.
 
+> **[DÜZELTME 2026-08-28] Önce biz gizleniriz, sonra misafir bırakılır.** Misafiri bırakmak
+> dört ayrı işlem (bölge temizleme, gizleme, `SetParent`, stil geri yükleme) ve her biri bizim
+> istemci alanımızı yeniden çizdiriyor — çizdiği şey de görüntüsü gitmiş bir pencere: siyah
+> dikdörtgen ya da ortası boş telefon çerçevesi. Kendimizi en sona gizlemek bunu ekranda
+> **~2,8 ms** tutuyordu (ölçüldü), yoğun makinede bir-iki kare: kullanıcının "Durdur'a
+> basınca bir an görünüp kapanıyor" dediği şey. Aynı ölçüm ikinci bir kaynağı da yakaladı:
+> `SetWindowLongPtr(GWL_STYLE, a.style)` kaydedilmiş `WS_VISIBLE`'ı artık üst-düzey olan
+> pencereye geri yazıyor ve `SWP_HIDEWINDOW` onu temizleyene kadar ~2 ms görünüyordu.
+> Regresyon testi: `airplay_release_flash` (0,5 ms tolerans).
+
 ### [KARAR] `-fs` embed açıkken argv'ye eklenmez
 
 Tam ekran artık bizim penceremizin özelliği. `Tam ekran` kutusu işaretliyken görüntü

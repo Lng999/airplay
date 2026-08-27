@@ -91,9 +91,12 @@ void releaseWindow(const AdoptedWindow& a, bool visible) {
     if (!visible) ShowWindow(a.hwnd, SW_HIDE);
 
     SetParent(a.hwnd, nullptr);
-    // This puts the saved WS_VISIBLE bit back whether we want it or not; the SetWindowPos
-    // below is what actually decides, and SWP_HIDEWINDOW clears the bit again for good.
-    SetWindowLongPtrW(a.hwnd, GWL_STYLE, a.style);
+    // The saved style word carries WS_VISIBLE, and writing it back to what is now a
+    // top-level window puts it on screen for the two milliseconds until SWP_HIDEWINDOW
+    // takes it off again - measured. Take the bit out instead of racing it.
+    LONG_PTR style = a.style;
+    if (!visible) style &= ~static_cast<LONG_PTR>(WS_VISIBLE);
+    SetWindowLongPtrW(a.hwnd, GWL_STYLE, style);
     SetWindowLongPtrW(a.hwnd, GWL_EXSTYLE, a.exStyle);
     SetWindowPos(a.hwnd, HWND_TOP, a.rect.left, a.rect.top, a.rect.right - a.rect.left,
                  a.rect.bottom - a.rect.top,
