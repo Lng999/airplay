@@ -832,6 +832,7 @@ void MainWindow::pollVideoWindow() {
         resolutionText_.clear();
         logUi(L"video: the receiver closed its window");
         updateStatus();
+        armEmbedTimer(true);   // back to hunting: the next stream gets its own window
         return;
     }
     if (!cfg_.embedVideo || embedSuspended_ || !host_.isRunning()) return;
@@ -857,6 +858,7 @@ void MainWindow::pollVideoWindow() {
     logUi(note);
     updateStatus();
     updateVideoTitle();
+    armEmbedTimer(false);   // nothing left to hunt for; just keep an eye on it
 }
 
 void MainWindow::applyEmbedSetting() {
@@ -864,12 +866,17 @@ void MainWindow::applyEmbedSetting() {
         embedSuspended_ = false;
         // Ticking the box is the second way back from a closed picture window.
         video_.showPicture();
-        if (host_.isRunning()) SetTimer(hwnd_, kEmbedTimer, 300, nullptr);
+        if (host_.isRunning()) armEmbedTimer(!video_.hasGuest());
     } else {
         // The one caller that means it: the user asked for the picture in the receiver's
         // own window, so that window has to actually come back.
         releaseVideo(true);
     }
+}
+
+void MainWindow::armEmbedTimer(bool fast) {
+    if (!hwnd_) return;
+    SetTimer(hwnd_, kEmbedTimer, fast ? kEmbedPollFastMs : kEmbedPollIdleMs, nullptr);
 }
 
 void MainWindow::releaseVideo(bool toDesktop) {
@@ -932,7 +939,7 @@ void MainWindow::doStart() {
     }
 
     embedSuspended_ = false;
-    if (cfg_.embedVideo) SetTimer(hwnd_, kEmbedTimer, 300, nullptr);
+    if (cfg_.embedVideo) armEmbedTimer(true);
 
     state_ = host_.state();
     updateStatus();

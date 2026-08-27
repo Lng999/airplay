@@ -62,12 +62,17 @@ AdoptedWindow adoptWindow(HWND guest, HWND host) {
         exStyle & ~static_cast<LONG_PTR>(WS_EX_APPWINDOW | WS_EX_WINDOWEDGE | WS_EX_TOPMOST |
                                          WS_EX_TOOLWINDOW | WS_EX_DLGMODALFRAME);
 
+    // Off the desktop first. Dropping the caption, the frame and the buttons repaints the
+    // window where it currently stands, so restyling in place shows the user the receiver's
+    // own window losing its chrome and changing shape a moment before it moves into ours.
+    ShowWindow(guest, SW_HIDE);
     SetWindowLongPtrW(guest, GWL_STYLE, childStyle);
     SetWindowLongPtrW(guest, GWL_EXSTYLE, childEx);
 
     if (!SetParent(guest, host) && GetParent(guest) != host) {
         SetWindowLongPtrW(guest, GWL_STYLE, style);
         SetWindowLongPtrW(guest, GWL_EXSTYLE, exStyle);
+        ShowWindow(guest, SW_SHOW);   // exactly as we found it
         return a;
     }
 
@@ -77,9 +82,8 @@ AdoptedWindow adoptWindow(HWND guest, HWND host) {
     a.rect    = wr;
     a.source  = SIZE{cr.right, cr.bottom};
 
-    // A guest handed back with visible=false comes out of that without WS_VISIBLE, and the
-    // style word above carries the gap into this adoption. Visibility is ShowWindow's to
-    // set, never SetWindowLongPtr's; on an already-visible guest this is a no-op.
+    // Visible again, but as our child: the host is still hidden at this point, so nothing
+    // reaches the screen until the caller has finished laying the picture out and shows it.
     ShowWindow(guest, SW_SHOW);
     return a;
 }

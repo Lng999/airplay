@@ -84,12 +84,17 @@ bool VideoWindow::adopt(HWND guest) {
     adopted_ = adoptWindow(guest, hwnd_);
     if (!adopted_.valid()) return false;
 
+    // Sized, placed, framed and - if that is the remembered state - already fullscreen,
+    // all of it while we are still off screen. Showing first and arranging afterwards put a
+    // default-sized window holding an unplaced picture on screen for a frame, and then a
+    // jump to fullscreen on top of it: the blink on the first connection. The window goes
+    // up once, finished.
+    hidden_ = false;
     sizeToSource();
     setAlwaysOnTop(cfg_.alwaysOnTop);
-    hidden_ = false;
-    ShowWindow(hwnd_, SW_SHOW);
-    layoutGuest();
     if (cfg_.videoFullscreen || cfg_.fullscreen) setFullscreen(true);
+    layoutGuest();
+    ShowWindow(hwnd_, SW_SHOW);
     return true;
 }
 
@@ -414,6 +419,10 @@ void VideoWindow::setFullscreen(bool on) {
     if (on) {
         prevPlacement_.length = sizeof(prevPlacement_);
         GetWindowPlacement(hwnd_, &prevPlacement_);
+        // Going fullscreen before the window has ever been shown records SW_HIDE, and
+        // leaving fullscreen later would then restore a window nobody can see. Windowed
+        // means visible; only hide() decides otherwise, and it checks for itself.
+        if (prevPlacement_.showCmd == SW_HIDE) prevPlacement_.showCmd = SW_SHOWNORMAL;
         prevStyle_ = GetWindowLongPtrW(hwnd_, GWL_STYLE);
 
         MONITORINFO mi{};

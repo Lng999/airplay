@@ -58,6 +58,7 @@ private:
     // they stop, so adoption is a poll rather than an event.
     void pollVideoWindow();
     void applyEmbedSetting();     // the checkbox changed while the receiver may be running
+    void armEmbedTimer(bool fast);   // fast while hunting for the window, slow once we have it
     // Let the picture go; always before stopping the child. toDesktop only for the embed
     // setting being turned off - see VideoWindow::release().
     void releaseVideo(bool toDesktop = false);
@@ -112,7 +113,13 @@ private:
     VideoWindow video_;
 
     static constexpr UINT_PTR kUpdateTimer = 1;   // one shot, 4 s after the window is up
-    static constexpr UINT_PTR kEmbedTimer  = 2;   // 300 ms, while the receiver runs
+    static constexpr UINT_PTR kEmbedTimer  = 2;   // while the receiver runs; two speeds:
+    // The sink creates its window and shows it on the desktop the moment frames arrive, and
+    // we can only find it once it is visible - so between those two the receiver's own
+    // window is up, unstyled, wherever it put itself. At 300 ms that is a third of a second
+    // of it on screen on the first connection. One frame is as close as polling gets.
+    static constexpr UINT kEmbedPollFastMs = 16;
+    static constexpr UINT kEmbedPollIdleMs = 300;   // adopted: the tick only checks it lives
 
     airplay::HostState state_ = airplay::HostState::Stopped;
     int   currentFps_     = 0;   // last non-zero frame rate, shown in the status line
