@@ -93,14 +93,14 @@ bool VideoWindow::adopt(HWND guest) {
     return true;
 }
 
-void VideoWindow::release() {
+void VideoWindow::release(bool toDesktop) {
     hidden_ = false;
     if (!adopted_.valid()) return;
     clearGuestRegion();
     AdoptedWindow a = adopted_;
     adopted_ = AdoptedWindow{};
     geom_ = FrameGeometry{};
-    releaseWindow(a);
+    releaseWindow(a, toDesktop);
     if (hwnd_) {
         saveRect();
         ShowWindow(hwnd_, SW_HIDE);

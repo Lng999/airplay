@@ -227,12 +227,26 @@ int wmain(int argc, wchar_t** argv) {
     check(IsWindowVisible(video.hwnd()) != 0, "our window is back on screen");
     check(IsWindowVisible(guest) != 0, "the guest is visible again");
 
-    // 4. hand it back
+    // 4. hand it back quietly - what Stop, Exit and shutdown do. The guest still has to
+    // leave our window (Windows destroys children with their parent, and the sink does not
+    // expect that), but showing it on the way out made the picture flash onto the desktop
+    // for the moment before the receiver died: pressing Stop looked like it came back.
     video.release();
     pump(300);
     check(IsWindow(guest) != 0, "the guest still exists after release");
     check(GetParent(guest) == nullptr, "the guest is a top-level window again");
     check((GetWindowLongPtrW(guest, GWL_STYLE) & WS_CHILD) == 0, "WS_CHILD is gone");
+    check(IsWindowVisible(guest) == 0, "a quiet release does not flash it onto the desktop");
+
+    // 5. the loud one. Turning the embed setting off is the single caller that does want
+    // the receiver's own window back, visible, where it started.
+    check(video.adopt(guest), "a released guest can be adopted again");
+    pump(300);
+    check(IsWindowVisible(guest) != 0, "re-adoption un-hides the guest");
+    video.release(true);
+    pump(300);
+    check(GetParent(guest) == nullptr, "released to the desktop: no parent");
+    check(IsWindowVisible(guest) != 0, "released to the desktop: visible");
 
     GetExitCodeProcess(pi.hProcess, &ec);
     check(ec == STILL_ACTIVE, "the receiver process is still alive at the end");

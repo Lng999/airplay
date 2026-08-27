@@ -24,9 +24,13 @@ public:
     // Adopt the receiver's window; creates our own window on first call and shows it.
     bool adopt(HWND guest);
 
-    // Hand the guest back to the desktop and hide. Safe when nothing is adopted, and safe
+    // Stop showing the guest and hide ourselves. Safe when nothing is adopted, and safe
     // when the guest has already been destroyed by the receiver.
-    void release();
+    //
+    // `toDesktop` hands it back as a window of its own, visible where it started - which is
+    // right only when the user turns the embed setting off. Every other caller is on the way
+    // to that window being destroyed and wants it to go quietly; see releaseWindow().
+    void release(bool toDesktop = false);
 
     // The user closed the picture. Unlike release(), the guest stays adopted - a child of
     // our now-hidden window - so the receiver's own window does not pop back onto the

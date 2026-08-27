@@ -76,18 +76,29 @@ AdoptedWindow adoptWindow(HWND guest, HWND host) {
     a.exStyle = exStyle;
     a.rect    = wr;
     a.source  = SIZE{cr.right, cr.bottom};
+
+    // A guest handed back with visible=false comes out of that without WS_VISIBLE, and the
+    // style word above carries the gap into this adoption. Visibility is ShowWindow's to
+    // set, never SetWindowLongPtr's; on an already-visible guest this is a no-op.
+    ShowWindow(guest, SW_SHOW);
     return a;
 }
 
-void releaseWindow(const AdoptedWindow& a) {
+void releaseWindow(const AdoptedWindow& a, bool visible) {
     if (!a.valid() || !IsWindow(a.hwnd)) return;
 
+    // Dark first, then reparent: a window that is already hidden cannot flash on the way out.
+    if (!visible) ShowWindow(a.hwnd, SW_HIDE);
+
     SetParent(a.hwnd, nullptr);
+    // This puts the saved WS_VISIBLE bit back whether we want it or not; the SetWindowPos
+    // below is what actually decides, and SWP_HIDEWINDOW clears the bit again for good.
     SetWindowLongPtrW(a.hwnd, GWL_STYLE, a.style);
     SetWindowLongPtrW(a.hwnd, GWL_EXSTYLE, a.exStyle);
     SetWindowPos(a.hwnd, HWND_TOP, a.rect.left, a.rect.top, a.rect.right - a.rect.left,
                  a.rect.bottom - a.rect.top,
-                 SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+                 SWP_FRAMECHANGED | SWP_NOACTIVATE |
+                     (visible ? SWP_SHOWWINDOW : SWP_HIDEWINDOW));
 }
 
 } // namespace ui

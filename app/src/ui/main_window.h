@@ -58,7 +58,9 @@ private:
     // they stop, so adoption is a poll rather than an event.
     void pollVideoWindow();
     void applyEmbedSetting();     // the checkbox changed while the receiver may be running
-    void releaseVideo();          // hand the picture back; always before stopping the child
+    // Let the picture go; always before stopping the child. toDesktop only for the embed
+    // setting being turned off - see VideoWindow::release().
+    void releaseVideo(bool toDesktop = false);
     void updateVideoTitle();
 
     void onHostEvent(const airplay::HostEvent& ev);

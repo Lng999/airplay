@@ -866,13 +866,15 @@ void MainWindow::applyEmbedSetting() {
         video_.showPicture();
         if (host_.isRunning()) SetTimer(hwnd_, kEmbedTimer, 300, nullptr);
     } else {
-        releaseVideo();
+        // The one caller that means it: the user asked for the picture in the receiver's
+        // own window, so that window has to actually come back.
+        releaseVideo(true);
     }
 }
 
-void MainWindow::releaseVideo() {
+void MainWindow::releaseVideo(bool toDesktop) {
     if (hwnd_) KillTimer(hwnd_, kEmbedTimer);
-    video_.release();
+    video_.release(toDesktop);
 }
 
 // ---------------------------------------------------------------------------

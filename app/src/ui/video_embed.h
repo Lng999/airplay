@@ -33,6 +33,13 @@ AdoptedWindow adoptWindow(HWND guest, HWND host);
 
 // Hand the window back: original styles, original screen rect, no parent. Safe to call with
 // a guest that has already been destroyed.
-void releaseWindow(const AdoptedWindow& a);
+//
+// `visible` says whether it is shown where it lands. Only the embed setting being turned off
+// wants the receiver's own window back on the desktop. Stopping, exiting and swapping guests
+// all end with that window destroyed moments later, and one that flashes up in between reads
+// as a bug - it is the same window the user just watched, appearing and vanishing on its own.
+// It still has to leave our window either way: Windows destroys children with their parent,
+// and the sink does not expect that.
+void releaseWindow(const AdoptedWindow& a, bool visible);
 
 } // namespace ui
