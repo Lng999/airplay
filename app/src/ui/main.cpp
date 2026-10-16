@@ -11,6 +11,7 @@
 
 #include <string>
 
+#include "autostart.h"
 #include "main_window.h"
 #include "single_instance.h"
 
@@ -52,6 +53,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int) {
     icc.dwSize = sizeof(icc);
     icc.dwICC  = ICC_STANDARD_CLASSES | ICC_WIN95_CLASSES;
     InitCommonControlsEx(&icc);
+
+    // v0.3.0 Startup shortcut -> Run value; after the single-instance check, so only one does it.
+    ui::migrateLegacyStartupShortcut();
 
     ui::ConfigStore store;
     ui::AppConfig cfg;

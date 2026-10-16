@@ -79,19 +79,34 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
-; The Startup shortcut is named airplay.lnk because that is the name app/src/ui/autostart.cpp
-; looks for (and deletes when the "start with Windows" box is cleared). -minimized: coming up
-; at logon should land in the notification area, the same as the app's own Run value.
-Name: "{userstartup}\airplay"; Filename: "{app}\{#MyAppExeName}"; Parameters: "-minimized"; Tasks: startup
+
+[Registry]
+; "Windows açılışında başlat" has exactly one mechanism: the HKCU Run value. The app's own
+; checkbox (app/src/ui/autostart.cpp) reads and writes this very value - same key, same value
+; name "airplay", same "<exe>" -minimized form - so installer and app can never disagree, and
+; never both launch us at logon. -minimized: coming up at logon should land in the
+; notification area. uninsdeletevalue: uninstalling must not leave a Run entry behind that
+; points at a deleted exe.
+;
+; Check: not WizardSilent - a silent run is the update path (the app runs setup /SILENT without
+; /TASKS), and Inno restores the previous install's task selection there (UsePreviousTasks=yes,
+; the default). Without the check, a user who ticked the task once and later cleared the box
+; inside the app would get the Run value back on every auto-update. A silent run leaves the
+; value exactly as the app last set it. The v0.3.0 Startup shortcut is migrated by the app
+; itself (autostart.cpp), not here.
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "airplay"; ValueData: """{app}\{#MyAppExeName}"" -minimized"; Flags: uninsdeletevalue; Tasks: startup; Check: not WizardSilent
 
 [Run]
 ; No skipifsilent: a silent run is the update path, and the app it replaced has to come back.
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall
 
 [InstallDelete]
-; Installers up to v0.4.0 named the Startup shortcut after MyAppName. Drop it on upgrade so the
-; old and the new name never both launch us at logon; the startup task recreates the new one.
-Type: files; Name: "{userstartup}\AirPlay Alicisi.lnk"
+; No Startup shortcut any more - the startup task writes the Run value (see [Registry]).
+; Unreleased builds of this script put "airplay.lnk" there; drop it. The v0.3.0 installer's
+; "AirPlay Alicisi.lnk" is deliberately NOT deleted here: an upgrade is usually silent, the
+; Run value is not written then, and deleting it would silently lose the user's choice. The
+; app migrates it to the Run value on first start (migrateLegacyStartupShortcut, autostart.cpp).
+Type: files; Name: "{userstartup}\airplay.lnk"
 
 [UninstallDelete]
 ; The GStreamer plugin cache the app builds on first run. Settings and logs under
