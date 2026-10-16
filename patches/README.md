@@ -132,8 +132,12 @@ mirror idle: no video frames from client     (400 ms without a frame)
 mirror active: video frames resumed
 ```
 
-`app/src/host/line_parser.cpp` turns those into `MirrorActivity` events. The reaction is now
-about half a second, and the GUI hides the frozen picture and mutes the receiver in that time.
+`app/src/host/line_parser.cpp` turns those into `MirrorActivity` events, about half a second
+after the frames stop. The GUI no longer acts on them: an earlier version hid the frozen
+picture and muted the receiver, and that was removed in favour of leaving a sleeping phone's
+session alone (`app/README.md`, "Sleeping phone"). The events have no consumer
+(`app/src/ui/main_window.cpp`, `case K::MirrorActivity`); the two lines still reach the log.
+Whether to keep carrying this patch is an open decision.
 
 ## `0005-uxplay-report-video-stats.patch` — how much video is actually arriving
 
@@ -173,9 +177,10 @@ this correctly — verified against a synthetic LF-blob/CRLF-worktree repo. Plai
 
 ## How `build.sh` applies these (implemented)
 
-`scripts/build.sh` currently builds the submodule as-is. To make it patch-aware without
-ever leaving the submodule dirty in a surprising state, it should, right after the
-"submodule is checked out" sanity check and *before* `cmake` configure:
+`scripts/build.sh` resets the submodule and applies every patch before each build
+(`apply_patches()`). The design notes below were written before that existed; to stay
+patch-aware without ever leaving the submodule dirty in a surprising state, it does this
+right after the "submodule is checked out" sanity check and *before* `cmake` configure:
 
 1. **Reset first, then apply.** Run `git -C "${SRC_DIR}" checkout -- .` so the tree is
    pristine, then apply every `patches/*.patch` in sorted order. This makes the step

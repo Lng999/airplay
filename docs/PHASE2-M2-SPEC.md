@@ -191,8 +191,9 @@ geliyorsa bu belirsizlik hiç oluşmaz.
 - **FPS** zaten var: istemcinin kendi `-FPSdata` raporundan (`MirrorFps`), saniyede bir.
 - **Bit hızı** upstream'de hiçbir yerde raporlanmıyor. `patches/0005` `video_process()`
   içinde gelen bayt sayısını toplayıp saniyede bir satır basar:
-  `mirror bitrate: <kbps> kbps <fps> fps`. `line_parser` bunu `MirrorBitrate` olayına
-  çevirir, durum satırında `· 12.4 Mbps` olarak görünür.
+  `mirror stats: <kbps> kbps <fps> fps`. `line_parser` bunu `MirrorStats` olayına
+  çevirir, durum satırında `· 12.4 Mbps · 59 fps` olarak görünür (kare hızı da bu
+  satırdan güncellenir).
   Bu, 0004 gibi bize özel bir kanca; upstream PR adayı değil.
 
 ## 4. Phase 3 — Windows açılışında başlatma

@@ -61,7 +61,8 @@ iPhone 13 → **Windows 10 Pro 22H2** PC (ortam envanteri: Win11 değil; Ryzen 5
       `SetWindowLongPtr(GWLP_WNDPROC)` başka sürecin penceresinde yasak); reparent çalışıyor
       ve ölçüldü. Letterbox + oran kilitli boyutlandırma + F11 tam ekran + her zaman üstte.
       Çözünürlük artık `-d` olmadan da biliniyor (evlat edinme anındaki istemci alanı).
-      `app/tests/test_embed_live.cpp` gerçek `d3d11videosink` ile 15 kontrol, yeşil.
+      `app/tests/test_embed_live.cpp` gerçek `d3d11videosink` ile 34 kontrol (ilk sürümde 15;
+      çerçeve ve X'te gizleme sonradan eklendi), yeşil.
 - [x] FPS/bitrate: `patches/0005` alıcının kendi ölçümünü saniyede bir basıyor
       (`mirror stats: <kbps> kbps <fps> fps`), durum satırında `· 12.5 Mbps · 59 fps`
 
