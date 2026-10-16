@@ -127,7 +127,7 @@ private:
     bool  updateBusy_     = false;   // a check or a download is in flight
     std::wstring updateVersion_, updateUrl_, updatePageUrl_;
     std::wstring clientName_, clientModel_, lastError_, ipv4_;
-    std::wstring resolutionText_;   // "1920x1080", only ever filled when debug=true
+    std::wstring resolutionText_;   // "1920x1080": source size at adoption, or -d's resolution line
     bool  exiting_        = false;
     // adoptWindow() refused to move the receiver's window; stop trying for this session.
     bool  embedSuspended_ = false;

@@ -59,8 +59,8 @@ public:
     void setFullscreen(bool on);
     bool isFullscreen() const { return fullscreen_; }
 
-    // The user closed the video window: the guest is already back on the desktop and we are
-    // hidden. The main window uses this to stop re-adopting for the rest of the session.
+    // The user closed the video window: we are hidden and the guest is still adopted, hidden
+    // with us (WM_CLOSE -> hide()). Mirroring and audio carry on; showPicture() brings it back.
     void setOnClosed(std::function<void()> cb) { onClosed_ = std::move(cb); }
 
     // Copy the current position into the config (the caller decides when to persist it).

@@ -113,7 +113,7 @@ public:
     uint32_t  pid() const;           // 0 when stopped
 
     // Builds the exact argv that start() would use (for the UI's "command line" display and tests).
-    // Does NOT include argv[0] (the exe path); callers prepend cfg.uxplayExe if they need it.
+    // Element 0 is argv[0], cfg.uxplayExe itself; callers that want only the options skip it.
     // NOTE: stop() blocks the calling thread up to graceMs and temporarily detaches the caller's
     // console (FreeConsole/AttachConsole trick); never call it from inside the event callback.
     static std::vector<std::wstring> buildArgs(const HostConfig& cfg);
