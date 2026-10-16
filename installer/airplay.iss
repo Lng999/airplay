@@ -79,11 +79,19 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
-Name: "{userstartup}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: startup
+; The Startup shortcut is named airplay.lnk because that is the name app/src/ui/autostart.cpp
+; looks for (and deletes when the "start with Windows" box is cleared). -minimized: coming up
+; at logon should land in the notification area, the same as the app's own Run value.
+Name: "{userstartup}\airplay"; Filename: "{app}\{#MyAppExeName}"; Parameters: "-minimized"; Tasks: startup
 
 [Run]
 ; No skipifsilent: a silent run is the update path, and the app it replaced has to come back.
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall
+
+[InstallDelete]
+; Installers up to v0.4.0 named the Startup shortcut after MyAppName. Drop it on upgrade so the
+; old and the new name never both launch us at logon; the startup task recreates the new one.
+Type: files; Name: "{userstartup}\AirPlay Alicisi.lnk"
 
 [UninstallDelete]
 ; The GStreamer plugin cache the app builds on first run. Settings and logs under

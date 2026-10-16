@@ -15,14 +15,17 @@ std::wstring exePath() {
 }
 
 // installer/airplay.iss puts "{userstartup}\airplay.lnk" there when the user ticks the
-// "Windows açılışında başlat" task.
-std::wstring startupShortcut() {
+// "Windows açılışında başlat" task. Installers up to v0.4.0 named it after the app instead,
+// and such a shortcut survives until the next install, so both names count as ours.
+const wchar_t* const kStartupShortcuts[] = {L"airplay.lnk", L"AirPlay Alicisi.lnk"};
+
+// The per-user Startup folder with a trailing backslash, or empty if it cannot be resolved.
+std::wstring startupDir() {
     PWSTR raw = nullptr;
     std::wstring out;
     if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Startup, 0, nullptr, &raw)) && raw) {
         out = raw;
         if (!out.empty() && out.back() != L'\\') out.push_back(L'\\');
-        out += L"airplay.lnk";
     }
     if (raw) CoTaskMemFree(raw);
     return out;
@@ -41,15 +44,23 @@ bool runValueExists() {
 
 bool isLaunchAtLogon() {
     if (runValueExists()) return true;
-    const std::wstring lnk = startupShortcut();
-    return !lnk.empty() && fileExists(lnk);
+    const std::wstring dir = startupDir();
+    if (dir.empty()) return false;
+    for (const wchar_t* name : kStartupShortcuts)
+        if (fileExists(dir + name)) return true;
+    return false;
 }
 
 bool setLaunchAtLogon(bool on) {
-    // The shortcut goes either way: when switching on it would be a duplicate launch, and
-    // when switching off it is the half the user cannot see.
-    const std::wstring lnk = startupShortcut();
-    if (!lnk.empty() && fileExists(lnk)) DeleteFileW(lnk.c_str());
+    // The shortcuts go either way: when switching on they would be a duplicate launch, and
+    // when switching off they are the half the user cannot see.
+    const std::wstring dir = startupDir();
+    if (!dir.empty()) {
+        for (const wchar_t* name : kStartupShortcuts) {
+            const std::wstring lnk = dir + name;
+            if (fileExists(lnk)) DeleteFileW(lnk.c_str());
+        }
+    }
 
     HKEY key = nullptr;
     if (RegCreateKeyExW(HKEY_CURRENT_USER, kRunKey, 0, nullptr, 0, KEY_SET_VALUE, nullptr,
