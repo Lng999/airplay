@@ -14,7 +14,7 @@ app/
                                   main_window, tray, config_store, ui_log, single_instance,
                                   strings.h (the Turkish UI text)
   src/ui/updater.*                GitHub release check, download, silent reinstall
-  src/ui/stale_receivers.*        Start kills any leftover uxplay.exe (see below)
+  src/ui/stale_receivers.*        Start kills uxplay.exe left running from our own path (see below)
   src/ui/host_stub.cpp            fake host for -DAIRPLAY_HOST_STUB=ON builds
   src/ui/video_embed.*            find the receiver's window and adopt it (or hand it back)
   src/ui/video_window.*           the window the picture lives in
@@ -117,8 +117,10 @@ which is exactly how the sleep handling appeared "broken" while it was in fact n
 
 Both ends are closed now: the child runs inside a job object with
 `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` so it cannot outlive the GUI however the GUI dies, and
-**Start** first terminates any process whose image is exactly our `uxplay.exe`
-(`stale_receivers.cpp`), logging how many it removed. A manually launched `AirPlay.bat` is
+**Start** first terminates the processes whose full image path is the receiver path it is about
+to launch (`[app] uxplay_path` or the fallback above) — and only if that file is named
+`uxplay.exe`; a `uxplay.exe` elsewhere, or a path to some other program, is left alone
+(`stale_receivers.cpp`). It logs how many it removed. A manually launched `AirPlay.bat` is
 therefore closed by pressing Start — deliberately, since the two would otherwise fight.
 
 ### The picture window
@@ -293,12 +295,13 @@ x=…  y=…  w=…  h=…  ; where the picture window was last
 fullscreen=0        ; and whether it was fullscreen
 ```
 
-"Windows açılışında başlat" is **not** in `config.ini`. Two mechanisms can start us at
-logon — `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\airplay` and the optional
-Startup shortcut `installer/airplay.iss` offers — and a checkbox backed by a third place
-would drift out of step with both. It reads either, writes the Run value
-(`"<exe>" -minimized`) and, when switched off, removes the shortcut as well
-(`src/ui/autostart.cpp`).
+"Windows açılışında başlat" is **not** in `config.ini`. One mechanism starts us at logon:
+`HKCU\Software\Microsoft\Windows\CurrentVersion\Run\airplay` = `"<exe>" -minimized`. The
+checkbox writes it (`src/ui/autostart.cpp`), and so does the installer's startup task
+(`installer/airplay.iss`, `[Registry]`) — but only in an interactive install, so a silent
+auto-update never overrides what the user last chose in the app. A Startup-folder shortcut
+left by the v0.3.0 installer survives the upgrade on purpose: on its first start the app
+writes the Run value in its place and deletes the shortcut (`migrateLegacyStartupShortcut`).
 
 ## What is still out of reach
 
