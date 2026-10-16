@@ -20,7 +20,7 @@ iPhone 13 → **Windows 10 Pro 22H2** PC (ortam envanteri: Win11 değil; Ryzen 5
 | 9 | DRM belirsiz | FairPlay/DRM video **kapsam dışı** (prompt'taki gibi), ayrıca HLS/YouTube cast de kapsam dışı | Net sınır |
 
 ## 2b. Kaynak haritasından gelen sabit gerçekler (docs/research/uxplay-source-map.md)
-- Pin: `a3c19cbc` (2026-08-09, VERSION "1.74" `uxplay.cpp:75`; son tag v1.73.6 → HEAD yayınlanmamış). **Hash pinle, branch değil.**
+- Pin: `4e95a9e` (upstream master 2026-10-16, VERSION "1.74" `uxplay.cpp:78`; son tag v1.73.7 ayrı `release/1.73.7` dalında → 1.74 yayınlanmamış). 2026-10-17'de `a3c19cbc`'den taşındı (GHSA-479c-ww7g-wgp8, orphan pin; bkz. `docs/UPSTREAM-SYNC-SPEC.md`). **Hash pinle, branch değil.**
 - Dahili mDNSResponder `lib/mdnsd/` Windows'ta **varsayılan, bayrak gerekmez** (`CMakeLists.txt:51-66`, Fable doğruladı). **Prompt'taki `-DUSE_MDNS=1` yanlış** — o bayrak yalnızca Apple'da anlamlı. Bonjour fallback'i `-DUSE_DNS_SD=1` (+ Bonjour SDK `dnssd.dll`). Bilinen risk: upstream issue #546 — dahili mDNS native Windows'ta bir kullanıcıda çalışmadı (açık) → **proje #1 riski**, fallback planı hazır tutulur.
 - Features bitmask: `lib/dnssdint.h:32-34` tohum, **`uxplay.cpp:2001-2092` bit bit yeniden yazıyor** → DESIGN.md o bloğu alıntılar.
 - Handler tabloları: `lib/raop.c:406-444` (RTSP), `:445-478` (HTTP). Video pipeline `renderers/video_renderer.c:360-395`; varsayılan sink her platformda `autovideosink` (`uxplay.cpp:107`) → biz `d3d11videosink` geçeceğiz.
@@ -78,7 +78,7 @@ iPhone 13 → **Windows 10 Pro 22H2** PC (ortam envanteri: Win11 değil; Ryzen 5
       `installer/airplay.iss`, `scripts/publish-release.ps1`)
 
 ### Phase 0 sonrası bulunan upstream kusurları (patches/)
-- `0001` **[KAPANDI]** dahili mDNS A kaydı 127.0.0.1 ilan ediyordu (`mdnsd.c:348-373`, multicast hedefe connect+getsockname; bkz. docs/research/mdnsd-windows-rca.md). Yama: GetAdaptersAddresses ile default-gateway adaptörü. 2026-08-21 iPhone ile doğrulandı. Upstream'e PR adayı.
+- `0001` **emekli (upstream `8d62eba`)** dahili mDNS A kaydı 127.0.0.1 ilan ediyordu (pin `a3c19cbc`'de `mdnsd.c:348-373`, multicast hedefe connect+getsockname; bkz. docs/research/mdnsd-windows-rca.md). Yamamız (GetAdaptersAddresses ile default-gateway adaptörü) 2026-08-21 iPhone ile doğrulanmıştı. Upstream aynı kök sorunu `8d62eba` ile çözdü (`mdnsd.c:348-414` @`4e95a9e`); yama 2026-10-17'de silindi. Kalan risk (Hyper-V External switch / VPN adaptörü → A kaydı yok): `patches/README.md`, `docs/MANUAL-VERIFY.md` "Upstream 4e95a9e".
 - `0003` **[KAPANDI]** Windows'ta ASCII dışı `-n <ad>` kullanılamıyordu: `uxplay.exe` `-municode` olmadan derlendiği için `argv[]` ANSI kod sayfasından geliyor, `CreateProcessW` ile başlatan her çağıran (bizim GUI, cmd, PowerShell) `-n Salon Odası`'nı CP1254 bayt olarak teslim ediyor, `is_utf8()` reddedip `exit(0)` yapıyor (`uxplay.cpp:1204-1210`) — çağırana temiz kapanış gibi görünüyor. Yama gömülü manifest ile `activeCodePage=UTF-8` (Win10 1903+). 2026-08-21 doğrulandı. Upstream'e PR adayı (0001 ile birlikte).
 - `0004` Yansıtma duraklamasını hızlı bildirme: `video_process()` her karede çalıştığı için zaman damgası tutulup 200 ms'lik timer ile 400 ms kare gelmezse `mirror idle`, dönünce `mirror active` basılıyor. İstemcinin kendi `-FPSdata` raporu saniyede bir geldiğinden tek başına 2-3 sn gecikme veriyordu. Bize özel bir kanca; upstream PR adayı değil.
 - `0002` `CtrlHandler` CTRL_BREAK'i işlemiyor → GUI'den durdurunca `cleanup()` koşmuyor. Yama uygulandı (build.sh otomatik uyguluyor).

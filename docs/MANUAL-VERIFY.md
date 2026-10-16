@@ -92,6 +92,27 @@ görüntüsüyle) — 2026-08-22, yeşil. Model tanımlayıcısının geldiği d
       "terminated N stale uxplay.exe" satırı var
 - [ ] GUI'yi Görev Yöneticisi'nden zorla kapat → `uxplay.exe` de gidiyor (yetim kalmıyor)
 
+## Upstream 4e95a9e (pin `a3c19cbc` → `4e95a9e`, 2026-10-17)
+Kaynak: `docs/research/upstream-delta-2026-10.md` §8, `docs/UPSTREAM-SYNC-SPEC.md`. iPhone'suz
+kısım 2026-10-17'de yeşil (build 0 uyarı, smoke 12 PASS, `airplay_host_live` PASS); aşağıdakiler
+iPhone ister. Her maddede iOS sürümünü not et.
+- [ ] Keşif: Denetim Merkezi → Ekran Yansıtma listesinde alıcı görünüyor (`patches/0001` artık
+      yok, upstream `8d62eba`). Mümkünse VMware/Hyper-V adaptörü açıkken de dene
+- [ ] **Hyper-V External switch / VPN adaptörü riski:** gateway'li tek adaptörün açıklamasında
+      `Virtual`/`vEthernet`/`Hyper-V`/`WSL` geçiyorsa upstream adres seçmiyor → A kaydı
+      yayınlanmıyor (`mdnsd.c:374-380` @`4e95a9e`, okuyarak çıkarım). Böyle bir makinede iPhone
+      alıcıyı görüyor ve bağlanabiliyor mu? (Bu makinede yok: Ethernet Realtek, VMware host-only
+      adaptörlerinin gateway'i yok)
+- [ ] Mirroring + **ses**: video/müzik oynatırken ses geliyor (#605 yolu, `4c86094`). `-d` ile
+      kernel timestamp `(kernel)`/`(clock)` satırına bak
+- [ ] iPhone'dan mirroring'i durdur → pencere kapanıyor/sıfırlanıyor (TEARDOWN, #540, `546820c`).
+      Hemen yeniden başlat → görüntü bozuk değil (AES-CTR re-key, `f0b042b`)
+- [ ] `-h265` kapalı ve açık: bağlantı kuruluyor mu, donuk kare var mı (#535/#607)
+- [ ] Mirror idle/active ve video stats (bit hızı · kare hızı) GUI'de hâlâ geliyor (0004/0005)
+- [ ] Ekran kilitli 2+ dakika: oturum ve `-reset` davranışı (`httpd` 60 sn timeout, `e60d981`)
+- [ ] GUI'den durdurma temiz (Ctrl-Break, 0002); Türkçe karakterli `-n` adı çalışıyor (0003)
+- [ ] Pause/resume sonrası ses geri geliyor (#539 upstream'de açık; regresyon mu bak)
+
 ## Bilinen gotcha'lar (kontrol et)
 - Ağ profili **Private** olmalı; firewall UDP 5353 + UxPlay TCP/UDP portları açık
 - **İki uxplay aynı anda çalışabilir** (SO_REUSEADDR): iPhone yanlış olana bağlanırsa GUI

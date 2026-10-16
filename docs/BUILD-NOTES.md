@@ -11,7 +11,7 @@ logs of that run.
 | OS | Windows 10 Pro 22H2, build 19045 (UBR 6466) |
 | CPU / GPU | AMD Ryzen 5 5600 (6C/12T) / NVIDIA GeForce RTX 4060 |
 | Network | Ethernet, **Private** profile, `192.168.1.107` |
-| UxPlay | submodule `third_party/UxPlay` @ `a3c19cbc` (2026-08-09), `VERSION "1.74"` |
+| UxPlay | submodule `third_party/UxPlay` @ `4e95a9e` (2026-10-16), `VERSION "1.74"` — the 2026-08-20 run below used `a3c19cbc` (2026-08-09); re-verified 2026-10-17, see §8 |
 | Toolchain | MSYS2 **UCRT64** — gcc 16.2.0, cmake 4.4.2, ninja 1.13.2, pkgconf 3.0.5 |
 | Media | GStreamer 1.28.6 (base/good/bad/libav), OpenSSL 3.6.3, libplist 2.7.0 |
 
@@ -271,7 +271,12 @@ libplist-2.0.dll        libstdc++-6.dll
 libwinpthread-1.dll
 ```
 
-These 15 are the link-time closure only. The GStreamer **plugins** (`d3d11videosink`,
+**Since the pin moved to `4e95a9e` (2026-10-17) it is 17:** the list above plus
+`libgstvideo-1.0-0.dll` (upstream `57ea834`, `prepare-window-handle` bus handler) and its
+dependency `liborc-0.4-0.dll` (measured with the same command). The 15 above were the
+`a3c19cbc` closure.
+
+These are the link-time closure only. The GStreamer **plugins** (`d3d11videosink`,
 `wasapi2sink`, `avdec_*`, …) are dlopen'd at runtime from `C:\msys64\ucrt64\lib\gstreamer-1.0`
 and do **not** appear here — a self-contained bundle (Phase 3) must copy them separately.
 
@@ -326,6 +331,18 @@ and do **not** appear here — a self-contained bundle (Phase 3) must copy them 
 - The advertised TXT records, including `features = 0x527FFEE6,0x0`, match DESIGN.md's
   reverse-engineered prediction.
 - Network preconditions: Private profile, `192.168.1.107`, inbound UDP 5353 allowed.
+
+### Re-verified on 2026-10-17 after moving the pin to `4e95a9e`
+
+- `scripts/build.sh` (MSYS2 UCRT64, same toolchain as above) applied `0002`-`0005` and built
+  `build\uxplay.exe`, 964 061 bytes, 41/41 ninja steps, **0 compiler warnings**.
+- `ntldd -R`: 17 ucrt64 DLLs (§6; new: `libgstvideo-1.0-0.dll`, `liborc-0.4-0.dll`).
+- `scripts/smoke-test.ps1`: 12 PASS / 0 FAIL / 0 WARN; `uxplay.exe -v` -> `UxPlay version 1.74`;
+  `_airplay._tcp` advertised at `192.168.1.106` (Ethernet) with two VMware host-only adapters
+  present - upstream's `GetAdaptersAddresses` path (formerly our `0001`) picked the right one.
+- `build-audit/tests/airplay_host_live.exe build/uxplay.exe`: reached `Waiting`, stop path
+  graceful (`CTRL_BREAK`, `0002`), RESULT PASS.
+- Not verified: anything with an iPhone (`docs/MANUAL-VERIFY.md`, "Upstream 4e95a9e").
 
 ### NOT verified — do not claim these work
 

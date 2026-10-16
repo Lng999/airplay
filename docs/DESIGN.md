@@ -1,13 +1,16 @@
 # DESIGN — Windows AirPlay Receiver on top of UxPlay
 
 **Upstream:** [FDH2/UxPlay](https://github.com/FDH2/UxPlay), GPLv3.
-**Pinned as a git submodule at** `third_party/UxPlay` @ `a3c19cbc7fcc870d74a0960bc97817a2569b4808`
-(source version `1.74`, `uxplay.cpp:75`; newest upstream tag is only `v1.73.6`, so this is
-unreleased 1.74 development).
+**Pinned as a git submodule at** `third_party/UxPlay` @ `4e95a9ec013c52d8555d88dbc55abe346e94d56e`
+(upstream master, 2026-10-16; source version `1.74`, `uxplay.cpp:78`; newest upstream tag is
+`v1.73.7`, cut from a `release/1.73.7` branch, so this is still unreleased 1.74 development).
+Moved from `a3c19cbc` on 2026-10-17 (`docs/UPSTREAM-SYNC-SPEC.md`).
 
 **We never edit inside `third_party/UxPlay`.** Every upstream change we need lives in `patches/`.
 
-Every claim below is cited as `file:line` relative to `third_party/UxPlay/`.
+Every claim below is cited as `file:line` relative to `third_party/UxPlay/`. **These citations were
+made against `a3c19cbc` and have not been re-checked against `4e95a9e`**; line numbers in
+`uxplay.cpp` and `lib/` have shifted (e.g. `VERSION` 75 → 78). Use `grep -n` before relying on one.
 Statements I could not confirm from the source are explicitly marked **UNVERIFIED**.
 Companion document: [`docs/research/uxplay-source-map.md`](research/uxplay-source-map.md).
 
