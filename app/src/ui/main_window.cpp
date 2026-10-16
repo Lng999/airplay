@@ -18,6 +18,7 @@
 #include "updater.h"
 #include "version.h"
 #include "video_embed.h"
+#include "win_util.h"
 
 namespace ui {
 
@@ -238,6 +239,10 @@ bool MainWindow::create() {
     if (w < 200 || h < 200) {
         x = y = CW_USEDEFAULT;
         w = h = CW_USEDEFAULT;
+    } else if (!rectOnSomeMonitor(RECT{x, y, x + w, y + h})) {
+        // Saved on a monitor that is gone: keep the size, let Windows place it. y must be
+        // CW_USEDEFAULT too, or CreateWindowEx would take it as a ShowWindow command.
+        x = y = CW_USEDEFAULT;
     }
 
     hwnd_ = CreateWindowExW(0, kWindowClass, L"airplay - AirPlay Receiver",

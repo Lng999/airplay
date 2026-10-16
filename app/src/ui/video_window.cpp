@@ -5,6 +5,7 @@
 
 #include "../res/resource.h"
 #include "strings.h"
+#include "win_util.h"
 
 namespace ui {
 namespace {
@@ -228,7 +229,9 @@ void VideoWindow::sizeToSource() {
 
     const int w = cw + extra.cx, h = ch + extra.cy;
     int x = cfg_.vx, y = cfg_.vy;
-    if (cfg_.vw <= 200 || cfg_.vh <= 200 || x == CW_USEDEFAULT || y == CW_USEDEFAULT) {
+    // A remembered spot on a monitor that has since been unplugged counts as no spot at all.
+    if (cfg_.vw <= 200 || cfg_.vh <= 200 || x == CW_USEDEFAULT || y == CW_USEDEFAULT ||
+        !rectOnSomeMonitor(RECT{x, y, x + w, y + h})) {
         x = work.left + (workW - w) / 2;
         y = work.top + (workH - h) / 2;
     }
