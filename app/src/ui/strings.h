@@ -33,6 +33,13 @@ inline constexpr const wchar_t* kUpdateFailPre  = L"Güncelleme kontrolü başar
 inline constexpr const wchar_t* kUpdateDownloading = L"Yeni sürüm indiriliyor…";
 inline constexpr const wchar_t* kUpdateNoAsset  =
     L"Bu sürüm için kurulum dosyası bulunamadı. Sürüm sayfası tarayıcıda açılsın mı?";
+// A newer release that will not be offered: log line only, never a dialog (docs/SPRINT0-SPEC.md B1/B2).
+inline constexpr const wchar_t* kUpdateSkippedPre   = L"Güncelleme atlandı: ";
+inline constexpr const wchar_t* kUpdateSkipUntrusted = L"indirme adresi GitHub dışını gösteriyor";
+inline constexpr const wchar_t* kUpdateSkipNoChecksum = L"bütünlük dosyası (.sha256) yok";
+inline constexpr const wchar_t* kUpdateBadHash =
+    L"İndirilen kurulum dosyası bütünlük kontrolünden geçmedi (SHA-256 uyuşmuyor). "
+    L"Dosya silindi, kurulum çalıştırılmadı.";
 
 // --- status line ------------------------------------------------------------
 inline constexpr const wchar_t* kStateStopped  = L"Kapalı";

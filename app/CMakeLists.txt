@@ -67,7 +67,7 @@ target_include_directories(airplay-gui PRIVATE
 
 target_link_libraries(airplay-gui PRIVATE
     airplay_host
-    shell32 ole32 comctl32 user32 gdi32 advapi32 iphlpapi ws2_32 winhttp
+    shell32 ole32 comctl32 user32 gdi32 advapi32 iphlpapi ws2_32 winhttp bcrypt
 )
 
 # WIN32 already implies -mwindows; -municode selects the wWinMain entry point and -static

@@ -73,3 +73,23 @@ set_target_properties(airplay_frame_tests PROPERTIES CXX_STANDARD 17 CXX_STANDAR
 
 add_test(NAME airplay_host_tests COMMAND airplay_host_tests)
 add_test(NAME airplay_frame_tests COMMAND airplay_frame_tests)
+
+# ---- unit tests: updater URL allowlist, checksum parsing, version/JSON scanners -----------------
+# updater.cpp includes the generated version.h, which only exists when app/CMakeLists.txt is the
+# top level (it runs configure_file before adding this directory); the standalone host build
+# (build-host) has none, so the target is skipped there.
+if(EXISTS "${CMAKE_BINARY_DIR}/generated/version.h")
+    add_executable(airplay_updater_tests
+        test_updater.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui/updater.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui/config_store.cpp)
+    target_link_libraries(airplay_updater_tests PRIVATE airplay_host winhttp bcrypt shell32 ole32)
+    target_include_directories(airplay_updater_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui
+        ${CMAKE_CURRENT_SOURCE_DIR}/../include
+        ${CMAKE_BINARY_DIR}/generated)
+    target_compile_options(airplay_updater_tests PRIVATE -Wall -Wextra)
+    target_link_options(airplay_updater_tests PRIVATE -static)
+    set_target_properties(airplay_updater_tests PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
+    add_test(NAME airplay_updater_tests COMMAND airplay_updater_tests)
+endif()

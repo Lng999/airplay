@@ -4,9 +4,12 @@
 #include "version.h"
 
 #include <winhttp.h>
+#include <bcrypt.h>
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
+#include <cwctype>
 #include <vector>
 
 namespace ui {
@@ -64,17 +67,86 @@ std::string jsonUnescape(const std::string& s) {
     return out;
 }
 
-// Value of the first `"key": "..."` at or after `from`. `end` receives the offset just past
-// the closing quote, so callers can keep scanning. Returns false when the key is not there.
+bool isJsonWs(char ch) { return ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n'; }
+
+size_t skipWs(const std::string& d, size_t i) {
+    while (i < d.size() && isJsonWs(d[i])) ++i;
+    return i;
+}
+
+// `i` is on an opening quote; returns the offset just past the closing one, or npos.
+size_t skipString(const std::string& d, size_t i) {
+    for (++i; i < d.size(); ++i) {
+        if (d[i] == '\\') { ++i; continue; }
+        if (d[i] == '"') return i + 1;
+    }
+    return std::string::npos;
+}
+
+// `i` is on the first character of any JSON value; returns the offset just past it, or npos.
+size_t skipValue(const std::string& d, size_t i) {
+    if (i >= d.size()) return std::string::npos;
+    if (d[i] == '"') return skipString(d, i);
+    if (d[i] != '{' && d[i] != '[') {
+        while (i < d.size() && d[i] != ',' && d[i] != '}' && d[i] != ']') ++i;
+        return i;
+    }
+    int depth = 0;
+    while (i < d.size()) {
+        const char ch = d[i];
+        if (ch == '"') {
+            i = skipString(d, i);
+            if (i == std::string::npos) return i;
+            continue;
+        }
+        if (ch == '{' || ch == '[') ++depth;
+        else if ((ch == '}' || ch == ']') && --depth == 0) return i + 1;
+        ++i;
+    }
+    return std::string::npos;
+}
+
+// `i` is on an opening quote; the unescaped string (UTF-8). False if it never closes.
+bool readString(const std::string& d, size_t i, std::string& value) {
+    const size_t e = skipString(d, i);
+    if (e == std::string::npos) return false;
+    value = jsonUnescape(d.substr(i + 1, e - i - 2));
+    return true;
+}
+
+// Offset of the value of member `key` of the object whose '{' is at `open`, or npos. Only
+// that object's own members count: keys of nested objects (an asset's "uploader") are skipped.
+size_t memberValue(const std::string& d, size_t open, const char* key) {
+    if (open >= d.size() || d[open] != '{') return std::string::npos;
+    size_t i = skipWs(d, open + 1);
+    while (i < d.size() && d[i] == '"') {
+        const size_t keyEnd = skipString(d, i);
+        if (keyEnd == std::string::npos) return std::string::npos;
+        const size_t colon = skipWs(d, keyEnd);
+        if (colon >= d.size() || d[colon] != ':') return std::string::npos;
+        const size_t value = skipWs(d, colon + 1);
+        if (d.compare(i + 1, keyEnd - i - 2, key) == 0 && std::strlen(key) == keyEnd - i - 2)
+            return value;
+        i = skipWs(d, skipValue(d, value));
+        if (i >= d.size() || d[i] != ',') return std::string::npos;
+        i = skipWs(d, i + 1);
+    }
+    return std::string::npos;
+}
+
+} // namespace
+
 bool findString(const std::string& doc, size_t from, const char* key, std::string& value,
-                size_t* end = nullptr) {
+                size_t* end) {
     const std::string needle = std::string("\"") + key + "\"";
     size_t k = doc.find(needle, from);
     if (k == std::string::npos) return false;
-    size_t c = doc.find(':', k + needle.size());
-    if (c == std::string::npos) return false;
-    size_t q = doc.find('"', c + 1);
-    if (q == std::string::npos) return false;
+    // Only whitespace may sit between the key and ':', and between ':' and the opening quote;
+    // anything else (null, a number, an object) means the value is not a string.
+    const size_t c = skipWs(doc, k + needle.size());
+    if (c >= doc.size() || doc[c] != ':') return false;
+    const size_t q = skipWs(doc, c + 1);
+    if (q >= doc.size() || doc[q] != '"') return false;
     size_t p = q + 1;
     std::string raw;
     for (; p < doc.size(); ++p) {
@@ -88,6 +160,163 @@ bool findString(const std::string& doc, size_t from, const char* key, std::strin
     return true;
 }
 
+// --- URL allowlist ------------------------------------------------------------------------------
+
+bool isAllowedUpdateUrl(const std::wstring& url) {
+    static const wchar_t kScheme[] = L"https://";
+    const size_t schemeLen = sizeof(kScheme) / sizeof(kScheme[0]) - 1;
+    if (url.size() <= schemeLen) return false;
+    for (size_t i = 0; i < schemeLen; ++i) {
+        if (towlower(url[i]) != kScheme[i]) return false;
+    }
+
+    // The authority runs to the first '/', '?' or '#'. Every character in it must be a plain
+    // hostname character: that alone rules out userinfo ("github.com@evil"), ports, IPv6
+    // literals, percent-escapes and backslash tricks without having to reason about each.
+    std::wstring host;
+    size_t i = schemeLen;
+    for (; i < url.size(); ++i) {
+        const wchar_t ch = url[i];
+        if (ch == L'/' || ch == L'?' || ch == L'#') break;
+        const wchar_t lc = static_cast<wchar_t>(towlower(ch));
+        const bool ok = (lc >= L'a' && lc <= L'z') || (lc >= L'0' && lc <= L'9') || lc == L'.' ||
+                        lc == L'-';
+        if (!ok) return false;
+        host.push_back(lc);
+    }
+
+    static const wchar_t* const kHosts[] = {
+        L"github.com",
+        L"objects.githubusercontent.com",
+        L"release-assets.githubusercontent.com",
+    };
+    for (const wchar_t* h : kHosts) {
+        if (host == h) return true;
+    }
+    return false;
+}
+
+// --- release assets and checksums ------------------------------------------------------------
+
+std::vector<ReleaseAsset> parseReleaseAssets(const std::string& doc) {
+    std::vector<ReleaseAsset> out;
+    size_t i = memberValue(doc, skipWs(doc, 0), "assets");
+    if (i >= doc.size() || doc[i] != '[') return out;
+    i = skipWs(doc, i + 1);
+    while (i < doc.size() && doc[i] != ']') {
+        if (doc[i] == '{') {
+            ReleaseAsset a;
+            const size_t n = memberValue(doc, i, "name");
+            const size_t u = memberValue(doc, i, "browser_download_url");
+            if (n < doc.size() && u < doc.size() && doc[n] == '"' && doc[u] == '"' &&
+                readString(doc, n, a.name) && readString(doc, u, a.url)) {
+                out.push_back(a);
+            }
+        }
+        i = skipWs(doc, skipValue(doc, i));
+        if (i >= doc.size() || doc[i] != ',') break;
+        i = skipWs(doc, i + 1);
+    }
+    return out;
+}
+
+namespace {
+
+int hexDigit(char ch) {
+    if (ch >= '0' && ch <= '9') return ch - '0';
+    if (ch >= 'a' && ch <= 'f') return ch - 'a' + 10;
+    if (ch >= 'A' && ch <= 'F') return ch - 'A' + 10;
+    return -1;
+}
+
+} // namespace
+
+bool parseSha256File(const std::string& content, std::string& hex) {
+    size_t i = 0;
+    if (content.compare(0, 3, "\xEF\xBB\xBF") == 0) i = 3;   // a BOM from an editor
+    while (i < content.size() && isJsonWs(content[i])) ++i;
+    if (content.size() - i < 64) return false;
+    std::string h;
+    for (size_t k = 0; k < 64; ++k) {
+        const int v = hexDigit(content[i + k]);
+        if (v < 0) return false;
+        h.push_back("0123456789abcdef"[v]);
+    }
+    // The digest must end there: "<hex>  <name>", "<hex> *<name>" or the bare digest.
+    if (i + 64 < content.size() && !isJsonWs(content[i + 64])) return false;
+    hex = h;
+    return true;
+}
+
+bool hexEquals(const std::string& a, const std::string& b) {
+    if (a.empty() || a.size() != b.size()) return false;
+    for (size_t k = 0; k < a.size(); ++k) {
+        const int x = hexDigit(a[k]), y = hexDigit(b[k]);
+        if (x < 0 || x != y) return false;
+    }
+    return true;
+}
+
+namespace {
+
+// Incremental SHA-256 over CNG, so the installer is hashed as it streams to disk.
+class Sha256 {
+public:
+    Sha256() {
+        if (!BCRYPT_SUCCESS(BCryptOpenAlgorithmProvider(&alg_, BCRYPT_SHA256_ALGORITHM, nullptr, 0))) {
+            alg_ = nullptr;
+            return;
+        }
+        if (!BCRYPT_SUCCESS(BCryptCreateHash(alg_, &hash_, nullptr, 0, nullptr, 0, 0))) hash_ = nullptr;
+    }
+    ~Sha256() {
+        if (hash_) BCryptDestroyHash(hash_);
+        if (alg_) BCryptCloseAlgorithmProvider(alg_, 0);
+    }
+    Sha256(const Sha256&) = delete;
+    Sha256& operator=(const Sha256&) = delete;
+
+    bool update(const void* data, size_t len) {
+        if (!hash_) return false;
+        auto* p = static_cast<PUCHAR>(const_cast<void*>(data));
+        while (len > 0) {
+            const ULONG chunk = len > 0x40000000u ? 0x40000000u : static_cast<ULONG>(len);
+            if (!BCRYPT_SUCCESS(BCryptHashData(hash_, p, chunk, 0))) return false;
+            p += chunk;
+            len -= chunk;
+        }
+        return true;
+    }
+    // Lower-case hex digest, or "" if CNG failed anywhere along the way. Call once.
+    std::string finishHex() {
+        if (!hash_) return {};
+        UCHAR digest[32];
+        if (!BCRYPT_SUCCESS(BCryptFinishHash(hash_, digest, sizeof(digest), 0))) return {};
+        std::string hex;
+        for (UCHAR b : digest) {
+            hex.push_back("0123456789abcdef"[b >> 4]);
+            hex.push_back("0123456789abcdef"[b & 0x0F]);
+        }
+        return hex;
+    }
+
+private:
+    BCRYPT_ALG_HANDLE  alg_  = nullptr;
+    BCRYPT_HASH_HANDLE hash_ = nullptr;
+};
+
+} // namespace
+
+std::string sha256Hex(const void* data, size_t len) {
+    Sha256 h;
+    if (!h.update(data, len)) return {};
+    return h.finishHex();
+}
+
+std::wstring checksumUrlFor(const std::wstring& installerUrl) { return installerUrl + L".sha256"; }
+
+namespace {
+
 // --- WinHTTP ----------------------------------------------------------------------------------
 
 struct Session {
@@ -99,10 +328,29 @@ struct Handle {
     ~Handle() { if (h) WinHttpCloseHandle(h); }
 };
 
+// The URL a request ended up at, after WinHTTP followed any redirects. Empty on failure.
+std::wstring finalUrl(HINTERNET req) {
+    DWORD bytes = 0;
+    WinHttpQueryOption(req, WINHTTP_OPTION_URL, nullptr, &bytes);
+    if (GetLastError() != ERROR_INSUFFICIENT_BUFFER || bytes == 0) return {};
+    std::wstring buf(bytes / sizeof(wchar_t) + 1, L'\0');
+    if (!WinHttpQueryOption(req, WINHTTP_OPTION_URL, &buf[0], &bytes)) return {};
+    buf.resize(bytes / sizeof(wchar_t));
+    while (!buf.empty() && buf.back() == L'\0') buf.pop_back();
+    return buf;
+}
+
 // Opens `url` and leaves the response ready to be read. Follows redirects (WinHTTP does that
 // by default), which is what makes browser_download_url work: it 302s to a CDN host.
-bool openUrl(const std::wstring& url, Session& session, Handle& conn, Handle& req,
-             std::string* err) {
+// `allowlisted`: the URL came out of an API response, so both it and wherever the redirects
+// end must pass isAllowedUpdateUrl. (The API URL itself is a compile-time constant.)
+bool openUrl(const std::wstring& url, bool allowlisted, Session& session, Handle& conn,
+             Handle& req, std::string* err) {
+    if (allowlisted && !isAllowedUpdateUrl(url)) {
+        setErr(err, "untrusted download URL");
+        return false;
+    }
+
     URL_COMPONENTS uc{};
     uc.dwStructSize     = sizeof(uc);
     wchar_t host[256]{}, path[2048]{};
@@ -135,6 +383,12 @@ bool openUrl(const std::wstring& url, Session& session, Handle& conn, Handle& re
     }
     if (!WinHttpReceiveResponse(req.h, nullptr)) { setWinErr(err, "WinHttpReceiveResponse"); return false; }
 
+    // Checked before a single body byte is read: a redirect off GitHub is refused outright.
+    if (allowlisted && !isAllowedUpdateUrl(finalUrl(req.h))) {
+        setErr(err, "redirected to an untrusted host");
+        return false;
+    }
+
     DWORD status = 0, len = sizeof(status);
     WinHttpQueryHeaders(req.h, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
                         WINHTTP_HEADER_NAME_BY_INDEX, &status, &len, WINHTTP_NO_HEADER_INDEX);
@@ -147,9 +401,9 @@ bool openUrl(const std::wstring& url, Session& session, Handle& conn, Handle& re
     return true;
 }
 
-bool httpGet(const std::wstring& url, std::string& body, std::string* err) {
+bool httpGet(const std::wstring& url, bool allowlisted, std::string& body, std::string* err) {
     Session s; Handle c, r;
-    if (!openUrl(url, s, c, r, err)) return false;
+    if (!openUrl(url, allowlisted, s, c, r, err)) return false;
 
     body.clear();
     for (;;) {
@@ -192,7 +446,7 @@ bool checkForUpdate(UpdateInfo& out, std::string* err) {
     const std::wstring url = L"https://api.github.com/repos/" AIRPLAY_GH_OWNER_W L"/"
                              AIRPLAY_GH_REPO_W L"/releases/latest";
     std::string body;
-    if (!httpGet(url, body, err)) return false;
+    if (!httpGet(url, false, body, err)) return false;
 
     std::string tag;
     if (!findString(body, 0, "tag_name", tag)) { setErr(err, "tag_name not in the response"); return false; }
@@ -217,31 +471,60 @@ bool checkForUpdate(UpdateInfo& out, std::string* err) {
         out.notes = widen(trimmed);
     }
 
-    // The installer is the one .exe attached to the release. Scan every asset's
-    // browser_download_url rather than trusting a name, so renaming the file is harmless.
-    size_t pos = body.find("\"assets\"");
-    if (pos == std::string::npos) pos = 0;
-    std::string dl;
-    size_t next = pos;
-    while (findString(body, next, "browser_download_url", dl, &next)) {
-        if (dl.size() > 4 && dl.compare(dl.size() - 4, 4, ".exe") == 0) {
-            out.downloadUrl = widen(dl);
-            break;
+    // The installer is the one .exe attached to the release, judged by its download URL so
+    // renaming the file is harmless. Its checksum is the asset named "<installer>.sha256"
+    // (scripts/publish-release.ps1), which GitHub serves at the installer's URL + ".sha256".
+    const std::vector<ReleaseAsset> assets = parseReleaseAssets(body);
+    const ReleaseAsset* exe = nullptr;
+    for (const ReleaseAsset& a : assets) {
+        if (a.url.size() > 4 && a.url.compare(a.url.size() - 4, 4, ".exe") == 0) { exe = &a; break; }
+    }
+    bool hasChecksum = false;
+    if (exe) {
+        out.downloadUrl = widen(exe->url);
+        for (const ReleaseAsset& a : assets) {
+            if (a.name == exe->name + ".sha256" && widen(a.url) == checksumUrlFor(out.downloadUrl)) {
+                hasChecksum = true;
+                break;
+            }
         }
+    }
+
+    // Both URLs are about to be fetched or handed to ShellExecute; neither leaves GitHub.
+    if ((!out.downloadUrl.empty() && !isAllowedUpdateUrl(out.downloadUrl)) ||
+        (!out.pageUrl.empty() && !isAllowedUpdateUrl(out.pageUrl))) {
+        out.skip = UpdateSkip::UntrustedUrl;
+    } else if (exe && !hasChecksum) {
+        // A release from before checksums were published: there is nothing to verify the
+        // installer against, and it would run with /SILENT, so it is not offered at all.
+        out.skip = UpdateSkip::NoChecksum;
     }
     return true;
 }
 
-bool downloadFile(const std::wstring& url, const std::wstring& destPath, std::string* err) {
+bool downloadInstaller(const std::wstring& url, const std::wstring& destPath, std::string* err,
+                       bool* integrityFailed) {
     setErr(err, "");
+    if (integrityFailed) *integrityFailed = false;
+
+    // The expected digest first: no point fetching 75 MB that cannot be checked.
+    std::string sumFile, expected;
+    if (!httpGet(checksumUrlFor(url), true, sumFile, err)) return false;
+    if (!parseSha256File(sumFile, expected)) {
+        setErr(err, "the .sha256 asset is not a SHA-256 digest");
+        if (integrityFailed) *integrityFailed = true;
+        return false;
+    }
+
     Session s; Handle c, r;
-    if (!openUrl(url, s, c, r, err)) return false;
+    if (!openUrl(url, true, s, c, r, err)) return false;
 
     const std::wstring partPath = destPath + L".part";
     HANDLE f = CreateFileW(partPath.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
                            FILE_ATTRIBUTE_NORMAL, nullptr);
     if (f == INVALID_HANDLE_VALUE) { setWinErr(err, "CreateFile"); return false; }
 
+    Sha256 hash;
     bool ok = true;
     for (;;) {
         DWORD avail = 0;
@@ -255,10 +538,25 @@ bool downloadFile(const std::wstring& url, const std::wstring& destPath, std::st
         if (!WriteFile(f, buf.data(), read, &written, nullptr) || written != read) {
             setWinErr(err, "WriteFile"); ok = false; break;
         }
+        if (!hash.update(buf.data(), read)) { setErr(err, "BCryptHashData failed"); ok = false; break; }
     }
     CloseHandle(f);
 
     if (!ok) { DeleteFileW(partPath.c_str()); return false; }
+
+    // Compared while the file is still a .part: a mismatch never gets an installer's name.
+    const std::string actual = hash.finishHex();
+    if (actual.empty()) {
+        setErr(err, "BCryptFinishHash failed");
+        DeleteFileW(partPath.c_str());
+        return false;
+    }
+    if (!hexEquals(actual, expected)) {
+        setErr(err, "SHA-256 mismatch: expected " + expected + ", got " + actual);
+        if (integrityFailed) *integrityFailed = true;
+        DeleteFileW(partPath.c_str());
+        return false;
+    }
 
     DeleteFileW(destPath.c_str());
     if (!MoveFileW(partPath.c_str(), destPath.c_str())) {

@@ -29,6 +29,7 @@ struct UpdateResult {
     bool         found = false;   // a newer release exists
     bool         manual = false;  // the user asked, so "up to date" is worth saying out loud
     std::wstring localPath;    // WM_UPDATE_DOWNLOADED: the installer on disk
+    bool         integrityFailed = false;   // WM_UPDATE_DOWNLOADED: SHA-256 did not match
 };
 
 namespace {
@@ -514,7 +515,7 @@ DWORD WINAPI updateDownloadThread(LPVOID p) {
     auto* r = new UpdateResult();
     r->info.version = job->version;
     const std::wstring dest = installerDownloadPath(job->version);
-    r->found = downloadFile(job->url, dest, &r->err);
+    r->found = downloadInstaller(job->url, dest, &r->err, &r->integrityFailed);
     if (r->found) r->localPath = dest;
     if (!PostMessageW(job->hwnd, MainWindow::WM_UPDATE_DOWNLOADED, 0,
                       reinterpret_cast<LPARAM>(r))) {
@@ -567,6 +568,14 @@ void MainWindow::onUpdateChecked(UpdateResult* r) {
         return;
     }
 
+    if (r->info.skip != UpdateSkip::None) {
+        // Found but not offered: a log line, never a prompt (docs/SPRINT0-SPEC.md B1, B2).
+        logUi(std::wstring(str::kUpdateSkippedPre) + r->info.version + L" — " +
+              (r->info.skip == UpdateSkip::NoChecksum ? str::kUpdateSkipNoChecksum
+                                                      : str::kUpdateSkipUntrusted));
+        return;
+    }
+
     updateVersion_ = r->info.version;
     updateUrl_     = r->info.downloadUrl;
     updatePageUrl_ = r->info.pageUrl;
@@ -585,7 +594,7 @@ void MainWindow::onUpdateChecked(UpdateResult* r) {
         msg += L"\n\n";
         msg += str::kUpdateNoAsset;
         if (MessageBoxW(hwnd_, msg.c_str(), str::kUpdateTitle, MB_ICONINFORMATION | MB_YESNO)
-                == IDYES && !updatePageUrl_.empty()) {
+                == IDYES && isAllowedUpdateUrl(updatePageUrl_)) {
             ShellExecuteW(hwnd_, L"open", updatePageUrl_.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
         }
         return;
@@ -600,6 +609,13 @@ void MainWindow::onUpdateChecked(UpdateResult* r) {
 void MainWindow::onUpdateDownloaded(UpdateResult* r) {
     updateBusy_ = false;
 
+    if (!r->found && r->integrityFailed) {
+        // The .part is already gone (updater.cpp); the detail goes to the log only.
+        logUi(L"update: " + widen(r->err));
+        logUi(str::kUpdateBadHash);
+        MessageBoxW(hwnd_, str::kUpdateBadHash, str::kAppName, MB_ICONERROR | MB_OK);
+        return;
+    }
     if (!r->found) {
         logUi(std::wstring(str::kUpdateFailPre) + widen(r->err));
         MessageBoxW(hwnd_, (std::wstring(str::kUpdateFailPre) + widen(r->err)).c_str(),
