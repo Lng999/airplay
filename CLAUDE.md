@@ -4,7 +4,7 @@
 - Kullanıcıya her zaman Türkçe yanıt ver; kod/komut/commit mesajları İngilizce.
 - **Her değişiklik commit edilir.** En ufak düzenleme bile ayrı commit. `git add -A` YASAK — dosyaları tek tek ekle.
 - Push ayrıca istenmedikçe yapılmaz.
-- Orkestrasyon: Fable ana döngü (spec/karar/sentez), Opus ajanlar (keşif/araştırma/review), Codex lane'leri (spec'e göre icra). Bkz. docs/ORCHESTRATION.md
+- Orkestrasyon: Fable ana döngü (spec/karar/sentez/commit), dört Opus rolü (analist, tasarımcı, geliştirici, denetçi). Codex bu projede kapalı. Ajanlar git'in yazma komutlarını çalıştırmaz. Bkz. docs/ORCHESTRATION.md
 - Doğrulanmış vs tahmin edilmiş bilgiyi ayır. Protokol detayını UxPlay kaynağına `file:line` ile atıfla; uydurma yok.
 - iPhone ile gerçek mirroring testi ajanlar tarafından yapılamaz → "MANUEL DOĞRULAMA GEREKLİ" olarak işaretle.
 
