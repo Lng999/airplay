@@ -21,6 +21,8 @@ public:
     // Both are posted by the updater worker thread and carry an owned heap object.
     static constexpr UINT WM_UPDATE_CHECKED    = WM_APP + 3;   // lParam = UpdateResult* (owned)
     static constexpr UINT WM_UPDATE_DOWNLOADED = WM_APP + 4;   // lParam = UpdateResult* (owned)
+    // Posted by the stop worker once UxplayHost::stop() has returned; carries nothing.
+    static constexpr UINT WM_HOST_STOPPED      = WM_APP + 5;
 
     MainWindow(HINSTANCE hinst, ConfigStore& store, AppConfig& cfg);
     ~MainWindow();
@@ -68,7 +70,12 @@ private:
     void onCommand(int id, int code);
 
     void doStart();
-    void doStop();
+    // Stops the receiver. By default stop() runs on a worker thread (it can take seconds when
+    // the child ignores CTRL_BREAK) and WM_HOST_STOPPED finishes the job; synchronous=true is
+    // for callers that must know the child is gone before they go on.
+    void doStop(bool synchronous = false);
+    void onStopFinished();
+    void joinStopThread();
     void doCopyCmdline();
     void doExit();
 
@@ -129,6 +136,9 @@ private:
     std::wstring clientName_, clientModel_, lastError_, ipv4_;
     std::wstring resolutionText_;   // "1920x1080": source size at adoption, or -d's resolution line
     bool  exiting_        = false;
+    // The worker running host_.stop() for doStop(); non-null from the click until
+    // WM_HOST_STOPPED has been handled. A second stop request while it is set is ignored.
+    HANDLE stopThread_    = nullptr;
     // adoptWindow() refused to move the receiver's window; stop trying for this session.
     bool  embedSuspended_ = false;
     UINT  taskbarCreated_ = 0;

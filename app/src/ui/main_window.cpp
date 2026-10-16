@@ -212,6 +212,7 @@ MainWindow::~MainWindow() {
     host_.setCallback(nullptr);
     releaseVideo();
     host_.stop();
+    joinStopThread();
     if (fontUi_) DeleteObject(fontUi_);
     if (fontStatus_) DeleteObject(fontStatus_);
 }
@@ -630,8 +631,9 @@ void MainWindow::onUpdateDownloaded(UpdateResult* r) {
     logUi(L"update: downloaded " + r->localPath);
 
     // The installer replaces uxplay.exe as well, so the child has to go first - and it is
-    // ours to stop, not the installer's to kill.
-    doStop();
+    // ours to stop, not the installer's to kill. Synchronous: the installer must not start
+    // while the old receiver is still running.
+    doStop(true);
 
     // /SILENT: the user already answered the question, a wizard would only ask it again.
     // installer/airplay.iss starts us back up when it is done.
@@ -808,8 +810,9 @@ void MainWindow::updateButtons() {
     SetWindowTextW(btnToggle_, running ? str::kBtnStop : str::kBtnStart);
     // Starting/Stopping are transient: the button would act on a state that is about to
     // change, so it stays disabled until the child has settled.
+    // The stop worker also counts: its Stopped event arrives before WM_HOST_STOPPED does.
     EnableWindow(btnToggle_, state_ != airplay::HostState::Starting &&
-                                 state_ != airplay::HostState::Stopping);
+                                 state_ != airplay::HostState::Stopping && !stopThread_);
     // Receiver settings only take effect on (re)start - see DESIGN 6.1 limitations.
     const BOOL editable = running ? FALSE : TRUE;
     for (HWND h : {editName_, editPort_, cmbVideo_, cmbAudio_, cmbFps_, cmbDecoder_,
@@ -910,7 +913,8 @@ void MainWindow::releaseVideo(bool toDesktop) {
 void MainWindow::startReceiver() { doStart(); }
 
 void MainWindow::doStart() {
-    if (host_.isRunning()) return;
+    // A stop still in flight: the button is grey for that reason, the tray may not know it.
+    if (stopThread_ || host_.isRunning()) return;
 
     configFromControls();
     if (cfg_.uxplayPath.empty() || !fileExists(cfg_.uxplayPath))
@@ -967,7 +971,35 @@ void MainWindow::doStart() {
     updateButtons();
 }
 
-void MainWindow::doStop() {
+namespace {
+
+struct StopJob {
+    HWND                 hwnd = nullptr;
+    airplay::UxplayHost* host = nullptr;
+};
+
+// stop() waits up to its grace period and then for the reader thread; none of that may
+// happen on the UI thread. Touches no HWND except through PostMessageW.
+DWORD WINAPI hostStopThread(LPVOID p) {
+    StopJob* job = static_cast<StopJob*>(p);
+    job->host->stop();
+    PostMessageW(job->hwnd, MainWindow::WM_HOST_STOPPED, 0, 0);
+    delete job;
+    return 0;
+}
+
+} // namespace
+
+void MainWindow::doStop(bool synchronous) {
+    if (stopThread_) {
+        // Already stopping. A caller that has to see the child gone waits for it: stop()
+        // takes the host's lifecycle lock, so it returns only once the worker's stop() has.
+        if (synchronous) {
+            host_.stop();
+            onStopFinished();
+        }
+        return;
+    }
     if (!host_.isRunning()) return;
     logUi(L"stop requested");
     state_ = airplay::HostState::Stopping;
@@ -976,7 +1008,33 @@ void MainWindow::doStop() {
     // Before the child dies: its window is a child of ours, and Windows would destroy it
     // along with ours if the order were the other way round.
     releaseVideo();
+
+    if (!synchronous) {
+        auto* job = new StopJob{hwnd_, &host_};
+        HANDLE t = CreateThread(nullptr, 0, hostStopThread, job, 0, nullptr);
+        if (t) {
+            stopThread_ = t;     // WM_HOST_STOPPED -> onStopFinished() takes it from here
+            updateButtons();
+            return;
+        }
+        delete job;              // no thread: stop right here rather than not at all
+    }
     host_.stop();
+    state_ = host_.state();
+    updateStatus();
+    updateButtons();
+}
+
+void MainWindow::joinStopThread() {
+    if (!stopThread_) return;
+    // The worker only has PostMessageW left to do once stop() has returned, so this is short.
+    WaitForSingleObject(stopThread_, INFINITE);
+    CloseHandle(stopThread_);
+    stopThread_ = nullptr;
+}
+
+void MainWindow::onStopFinished() {
+    joinStopThread();
     state_ = host_.state();
     updateStatus();
     updateButtons();
@@ -1312,6 +1370,11 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
         }
 
+        case WM_HOST_STOPPED:
+            // Posted after every event of that stop, so the state read here is final.
+            onStopFinished();
+            return 0;
+
         case WM_TRAY:
             switch (LOWORD(lp)) {
                 case WM_RBUTTONUP:
@@ -1410,16 +1473,24 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
 
         case WM_ENDSESSION:
             if (wp) {
+                // The session ends without doExit() ever running (typically from the tray), so
+                // save what it would have: the window rects, the picture position and the
+                // once-only hint flags. Before stop(), which may be slow, and the OS may not wait.
                 host_.setCallback(nullptr);
-                releaseVideo();
+                configFromControls();
+                saveWindowRect();
+                releaseVideo();      // also writes the picture window position into the config
+                store_.save(cfg_);
                 host_.stop();
+                joinStopThread();
             }
             return 0;
 
         case WM_DESTROY:
             host_.setCallback(nullptr);
             releaseVideo();
-            host_.stop();
+            host_.stop();          // waits for a stop worker still inside stop()
+            joinStopThread();
             tray_.remove();
             log_.setListBox(nullptr);
             log_.close();
