@@ -86,3 +86,21 @@ dokunulmaz). Her maddeden sonra `ninja -C build-audit` 0 uyarı + `ctest` yeşil
 ## Sonraya (bu sprintte değil)
 Yardımcıları birleştirme (§4.3-3), DPI küçükleri, strings.h'e kaçak İngilizce metinler, parser
 tablo güdümlü, `patches/0004` kararı, iPhone kontrol listesi [M].
+
+## Lane F — denetçi düzeltmeleri (review-sprint0-AD.md, 2026-10-17)
+- **F1 [KARAR] Tek otomatik başlatma mekanizması: HKCU Run değeri.** Installer'ın `startup` görevi
+  artık kısayol değil, `[Registry]` ile `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\airplay`
+  = `"{app}\airplay-gui.exe" -minimized` yazar (`uninsdeletevalue`; kaldırıcı da temizlemiş olur).
+  Kayıt `Check: not WizardSilent` — sessiz güncelleme kullanıcının uygulama içinden verdiği kararı
+  ezmez (denetçi ölçtü: Inno önceki görev seçimini hatırlıyor ve kutuyu kaldıranın kısayolunu geri
+  getiriyordu). `[Icons]` Startup satırı kalkar; `[InstallDelete]` iki eski kısayol adını da siler.
+  `autostart.cpp`: kısayol tanıma yalnız v0.3.0 kalıntısı için kalır, yorum buna göre.
+- **F2** "installers up to v0.4.0" → "the v0.3.0 installer" (`autostart.cpp`, `airplay.iss`).
+- **F3** `app/README.md` "any leftover uxplay.exe" → yalnız config'deki yol ile eşleşen.
+- (Job object yorumu yumuşatma → Lane C'ye eklendi, aynı dosya.)
+
+## Lane C ek
+- `uxplay_host.cpp:436-437` yorumunu yumuşat: CreateProcessW ile AssignProcessToJobObject arası
+  küçük bir pencere var; askıda başlatma bu sprintte yapılmıyor.
+- `uxplay_host.cpp:222` tasarımcı bulgusu: reddedilen/engellenen istemci (`-restrict`/`-pin` reddi)
+  `Connected` sayılıyor — bu sprintte yalnız **ölç ve raporla** (hangi log satırı geliyor), düzeltme v0.5.
