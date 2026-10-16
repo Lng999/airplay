@@ -326,8 +326,9 @@ std::vector<std::wstring> UxplayHost::buildArgs(const HostConfig& cfg) {
         a.push_back(L"-vd");
         a.push_back(widen(cfg.videoDecoder));
     }
-    // Always on (uxplay.cpp:1451). The reports are how we know whether the phone is still
-    // producing frames; the XML never reaches the log, only the parsed rate does.
+    // Always on (uxplay.cpp:1451). The reports feed the fps figure in the GUI's status line
+    // (MirrorFps); nothing pauses or stops on them any more. The XML never reaches the log,
+    // only the parsed rate does.
     a.push_back(L"-FPSdata");
     a.push_back(L"-reset"); a.push_back(std::to_wstring(cfg.resetSeconds));  // uxplay.cpp:1452
     for (const std::string& extra : cfg.extraArgs) a.push_back(widen(extra));
@@ -431,15 +432,28 @@ bool UxplayHost::start(const HostConfig& cfg, std::string* err) {
         return fail(lastErrorText("CreateProcessW", createErr));
     }
 
-    // Assign before the first resume-equivalent work happens; a failure here is not fatal,
-    // it only means we lose the orphan protection.
+    // Kill-on-close job: when the GUI dies, however it dies, the OS takes the receiver with
+    // it. The child is not created suspended, so it is already running by the time it joins
+    // the job; that is fine, the job only has to be in place before we could die. A failure
+    // here is not fatal - the receiver still runs, it just loses that orphan protection -
+    // but it is reported, since nothing else would ever show it.
+    std::string jobWarning;
     impl_->hJob = CreateJobObjectW(nullptr, nullptr);
-    if (impl_->hJob) {
+    if (!impl_->hJob) {
+        jobWarning = lastErrorText("CreateJobObjectW", GetLastError());
+    } else {
         JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
         limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-        SetInformationJobObject(impl_->hJob, JobObjectExtendedLimitInformation, &limits,
-                                sizeof(limits));
-        AssignProcessToJobObject(impl_->hJob, pi.hProcess);
+        if (!SetInformationJobObject(impl_->hJob, JobObjectExtendedLimitInformation, &limits,
+                                     sizeof(limits)))
+            jobWarning = lastErrorText("SetInformationJobObject", GetLastError());
+        else if (!AssignProcessToJobObject(impl_->hJob, pi.hProcess))
+            jobWarning = lastErrorText("AssignProcessToJobObject", GetLastError());
+        if (!jobWarning.empty()) {
+            // A job without the limit, or without the child in it, guards nothing.
+            CloseHandle(impl_->hJob);
+            impl_->hJob = nullptr;
+        }
     }
 
     impl_->hProcess = pi.hProcess;
@@ -448,6 +462,13 @@ bool UxplayHost::start(const HostConfig& cfg, std::string* err) {
     impl_->childPid.store(pi.dwProcessId, std::memory_order_release);
     impl_->setState(HostState::Starting);
     impl_->emitLog("start: " + narrow(cmdline));
+    if (!jobWarning.empty()) {
+        HostEvent ev;
+        ev.kind = HostEventKind::Warning;
+        ev.message = "job object: " + jobWarning +
+                     " - uxplay will not be closed automatically if this program exits abnormally";
+        impl_->emit(ev);
+    }
 
     impl_->reader = std::thread([this] { impl_->readerLoop(); });
     return true;
@@ -481,9 +502,10 @@ void UxplayHost::stop(unsigned graceMs) {
     {
         // Graceful path: console control event to the child's own process group.
         // NOTE: CTRL_C_EVENT is disabled for a group created with CREATE_NEW_PROCESS_GROUP, so
-        // CTRL_BREAK_EVENT is the only usable signal. uxplay's CtrlHandler (uxplay.cpp:587-599)
-        // handles CTRL_C/CTRL_CLOSE/CTRL_SHUTDOWN and returns FALSE for CTRL_BREAK, i.e. the OS
-        // default action ends the process — it exits, but without running cleanup().
+        // CTRL_BREAK_EVENT is the only usable signal. Upstream uxplay's CtrlHandler ignores it
+        // (returns FALSE, so the OS ends the process without cleanup()); patches/0002 adds the
+        // CTRL_BREAK case (uxplay.cpp:665 once patched), so the receiver quits its main loop
+        // and runs cleanup() - mDNS goodbye, GStreamer teardown - like it does for Ctrl+C.
         const bool hadConsole = (GetConsoleWindow() != nullptr);
         FreeConsole();
         if (AttachConsole(childPid)) {
