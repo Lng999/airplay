@@ -201,6 +201,17 @@ ParsedLine parseUxplayLineDetailed(const std::string& rawIn) {
         return out;
     }
 
+    // --- kernel timestamps unavailable (lib/raop_ntp.c:164, :181, :301; Windows UCRT64 builds
+    //     only). Logged at LOGGER_ERR, so it wears the "*** ERROR: " prefix, but each site clears
+    //     pWSARecvMsg_ptr and the NTP receive path falls back to plain user-mode timestamps
+    //     (raop_ntp.c:213) - the receiver carries on normally. Demoted to a warning so the GUI
+    //     does not report an error for it. Must be checked before the generic error prefix.
+    if (startsWith(t, "*** ERROR: ") && t.find("kernel timestamps") != std::string::npos) {
+        out.tag = LineTag::Warning;
+        out.events.push_back(makeEvent(HostEventKind::Warning, trim(t.substr(11))));
+        return out;
+    }
+
     if (startsWith(t, "*** ERROR: ")) {                             // uxplay.cpp:239
         out.tag = LineTag::Error;
         out.events.push_back(makeEvent(HostEventKind::Error, t.substr(11)));

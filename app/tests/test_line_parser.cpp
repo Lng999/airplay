@@ -388,6 +388,44 @@ void testFeedbackLate() {
     CHECK_INT(static_cast<long long>(p.events.size()), 1);   // the LogLine only
 }
 
+// lib/raop_ntp.c:164, :181, :301 - kernel timestamps could not be enabled. Logged through
+// LOGE ("*** ERROR: "), but the receiver falls back to user-mode timestamps and keeps going:
+// a warning, never an error. Other "*** ERROR: " lines stay errors.
+void testKernelTimestampsNotAnError() {
+    beginTest("kernel timestamp failure is a warning");
+    const char* const lines[] = {
+        // raop_ntp.c:164
+        "*** ERROR: Not enabling kernel timestamps due to socket error 10022:"
+        "An invalid argument was supplied.",
+        // raop_ntp.c:181 - the format string starts with a space
+        "*** ERROR:  kernel timestamps were not initialized due to socket error 10022:"
+        "An invalid argument was supplied.",
+        // raop_ntp.c:301
+        "*** ERROR: Disabling kernel timestamps due to socket error 10054:"
+        "An existing connection was forcibly closed by the remote host.",
+    };
+    for (const char* raw : lines) {
+        ParsedLine p = parseUxplayLineDetailed(raw);
+        CHECK_TAG(p, LineTag::Warning);
+        CHECK_LOGLINE(p, raw);
+        CHECK(find(p.events, HostEventKind::Error) == nullptr);
+        const HostEvent* w = find(p.events, HostEventKind::Warning);
+        CHECK(w != nullptr);
+        if (w) CHECK(w->message.find("kernel timestamps") != std::string::npos);
+    }
+    // The prefix and the stray leading space of :181 are gone from the message.
+    const ParsedLine second = parseUxplayLineDetailed(lines[1]);
+    const HostEvent* w2 = find(second.events, HostEventKind::Warning);
+    if (w2)
+        CHECK_STR(w2->message, "kernel timestamps were not initialized due to socket error 10022:"
+                               "An invalid argument was supplied.");
+
+    // Any other error line keeps its kind.
+    ParsedLine q = parseUxplayLineDetailed("*** ERROR: failed to start the NTP server");
+    CHECK_TAG(q, LineTag::Error);
+    CHECK(find(q.events, HostEventKind::Error) != nullptr);
+}
+
 // -FPSdata reports (lib/raop_rtp_mirror.c:807-811). submitSurfaceFPS == 0 is the only
 // reliable "the phone is not producing frames" signal - the client keeps sending feedback
 // while its screen is off, so the feedback timer never notices.
@@ -575,6 +613,7 @@ int main() {
     testError();
     testBareErrorLine();
     testFeedbackLate();
+    testKernelTimestampsNotAnError();
     testPlistReport();
     testMirrorActivity();
     testMirrorStats();
