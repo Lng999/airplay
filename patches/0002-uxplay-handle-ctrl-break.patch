@@ -5,9 +5,11 @@ A parent that created the child with CREATE_NEW_PROCESS_GROUP (which disables CT
 the group) can only deliver CTRL_BREAK. Without this case CtrlHandler returns FALSE,
 Windows kills the process and cleanup() (mDNS goodbye, GStreamer teardown) never runs.
 ---
+diff --git a/uxplay.cpp b/uxplay.cpp
+index be41031..0b69a39 100644
 --- a/uxplay.cpp
 +++ b/uxplay.cpp
-@@ -588,6 +588,7 @@
+@@ -628,6 +628,7 @@ static gboolean handle_signal(gpointer data) {
  static BOOL WINAPI CtrlHandler(DWORD signal) {
      switch (signal) {
      case CTRL_C_EVENT:

@@ -1,8 +1,8 @@
 diff --git a/uxplay.cpp b/uxplay.cpp
-index 15b9e17..e2aa610 100644
+index 0b69a39..d127868 100644
 --- a/uxplay.cpp
 +++ b/uxplay.cpp
-@@ -532,6 +532,38 @@ static void dump_video_to_file(unsigned char *data, int datalen) {
+@@ -572,6 +572,38 @@ static void dump_video_to_file(unsigned char *data, int datalen) {
      }
  }
  
@@ -41,16 +41,16 @@ index 15b9e17..e2aa610 100644
  static gboolean feedback_callback(gpointer loop) {
      if (open_connections) {
          if (missed_feedback_limit && missed_feedback > missed_feedback_limit) {
-@@ -720,6 +753,8 @@ static void main_loop()  {
+@@ -787,6 +819,8 @@ static void main_loop()  {
      missed_feedback = 0;
      guint feedback_watch_id = g_timeout_add_seconds(1, (GSourceFunc) feedback_callback, (gpointer) loop);
      guint reset_watch_id = g_timeout_add(100, (GSourceFunc) reset_callback, (gpointer) loop);
 +    guint mirror_activity_id = g_timeout_add(200, (GSourceFunc) mirror_activity_callback,
 +                                             (gpointer) loop);
  
- #ifdef _WIN32
-     gmainloop = loop;
-@@ -755,6 +790,7 @@ static void main_loop()  {
+ #ifdef EXTERNAL_DNS_SD
+     guint dnssd_watch_id[2] = { 0 };
+@@ -863,6 +897,7 @@ static void main_loop()  {
      if (progress_id > 0) g_source_remove(progress_id);
      if (video_eos_watch_id > 0) g_source_remove(video_eos_watch_id);
      if (feedback_watch_id > 0) g_source_remove(feedback_watch_id);
@@ -58,7 +58,7 @@ index 15b9e17..e2aa610 100644
      g_main_loop_unref(loop);
  }    
  
-@@ -2335,6 +2371,7 @@ extern "C" void audio_process (void *cls, raop_ntp_t *ntp, audio_decode_struct *
+@@ -2728,6 +2763,7 @@ extern "C" void audio_process (void *cls, raop_ntp_t *ntp, audio_decode_struct *
  }
  
  extern "C" void video_process (void *cls, raop_ntp_t *ntp, video_decode_struct *data) {

@@ -1,93 +1,76 @@
 # Patches against `third_party/UxPlay`
 
-Local fixes carried on top of the pinned UxPlay submodule (1.74, `a3c19cbc`).
+Local fixes carried on top of the pinned UxPlay submodule (1.74, `4e95a9e` = upstream master
+2026-10-16; previously `a3c19cbc`, moved 2026-10-17, see `docs/UPSTREAM-SYNC-SPEC.md`).
 The submodule itself is **never** committed to — these patches are re-applied to a
 clean checkout on every build.
 
 | Patch | Fixes |
 |---|---|
-| `0001-mdnsd-windows-iface.patch` | `lib/mdnsd` advertises `127.0.0.1` and joins the multicast group on the loopback interface, making the AirPlay service invisible to every other host (iPhone included). |
+| ~~`0001-mdnsd-windows-iface.patch`~~ | **Retired 2026-10-17** — fixed upstream by `8d62eba` (see below). Number left unused. |
 | `0002-uxplay-handle-ctrl-break.patch` | `CtrlHandler` ignores `CTRL_BREAK_EVENT`, so a GUI host cannot stop UxPlay cleanly. |
 | `0003-uxplay-utf8-argv-manifest.patch` | A non-ASCII `-n <name>` is rejected on Windows: argv arrives in the ANSI code page. |
 | `0004-uxplay-report-mirror-idle.patch` | Hook: says within 400 ms that video frames stopped or resumed. |
 | `0005-uxplay-report-video-stats.patch` | Hook: reports the video bitrate and frame rate once a second. |
 
+`0002`–`0005` were regenerated against `4e95a9e` on 2026-10-17 (`git diff` per patch on top of
+the previous one). Only hunk positions and context moved; the added/removed lines are
+identical to the `a3c19cbc` versions (0002 +1/−0, 0003 +22/−1, 0004 +36/−0, 0005 +47/−0).
+`0005` still applies only on top of `0004`.
+
 ---
 
-## `0001-mdnsd-windows-iface.patch` — the two defects
+## `0001-mdnsd-windows-iface.patch` — retired (2026-10-17, upstream `8d62eba`)
 
-Full analysis with evidence: [`docs/research/mdnsd-windows-rca.md`](../docs/research/mdnsd-windows-rca.md).
+The patch file is deleted; the number `0001` stays unused so `0002`–`0005` keep their names.
+Its full text and the original two-defect analysis are in git history (the last commit that
+still has `patches/0001-mdnsd-windows-iface.patch`) and in
+[`docs/research/mdnsd-windows-rca.md`](../docs/research/mdnsd-windows-rca.md).
 
-### Defect 1 — wrong source of the local IPv4 address (the real bug)
+**Why it is no longer needed.** The defect was that `mdns_get_default_ipv4()` found the
+host address with `connect(224.0.0.251)` + `getsockname()`, which on Windows can return
+`127.0.0.1`; that value became the A record, `IP_MULTICAST_IF` and the `IP_ADD_MEMBERSHIP`
+interface. Upstream `8d62eba` (2026-09-02) fixes the same root cause: on `_WIN32`,
+`mdns_get_default_ipv4()` (`third_party/UxPlay/lib/mdnsd/mdnsd.c:348-414`) no longer calls
+`connect()` at all and walks `GetAdaptersAddresses(AF_INET, GAA_FLAG_INCLUDE_GATEWAYS, …)`
+instead (`mdnsd.c:360-367`); the old probe now only runs in the POSIX `#else` branch
+(`mdnsd.c:392-414`). The result still lands in `mdnsd->ipv4_addr` (`mdnsd.c:1038`) and from
+there in the A record (`mdnsd.c:246`), `IP_MULTICAST_IF` (`mdnsd.c:503`) and
+`IP_ADD_MEMBERSHIP` (`mdnsd.c:518-526`).
 
-`mdns_get_default_ipv4()` (`third_party/UxPlay/lib/mdnsd/mdnsd.c:348-373`) determines the
-host's own address with the classic "connect a UDP socket and ask `getsockname()`" trick,
-using the mDNS multicast group `224.0.0.251` as the destination
-(`mdnsd.c:364-369`).
+**How upstream differs from our 0001** [read from source, not measured]:
 
-That trick relies on the kernel doing a route lookup at `connect()` time. Linux does.
-**Windows does not do it for a multicast destination** — it returns the loopback address.
-Measured on this machine (`gcc` + Winsock, no UxPlay involved):
+| Topic | Upstream `8d62eba` | Retired 0001 |
+|---|---|---|
+| Adapter choice | **first** adapter that is up, not loopback, has a gateway (`mdnsd.c:374-380`) | adapter with a gateway and the lowest `Ipv4Metric` |
+| Virtual adapters | skipped if the description contains `Hyper-V`, `Virtual`, `WSL` or `vEthernet` (`mdnsd.c:377-380`) | not filtered |
+| APIPA `169.254/16` | not filtered (`FirstUnicastAddress` as is, `mdnsd.c:382-385`) | skipped |
+| Nothing found | `addr = 0`: no A record (`mdns_add_a()` skips 0, `mdnsd.c:201-203`), multicast on `INADDR_ANY` (`mdnsd.c:522`) | `connect` probe, `127/8` rejected, then `gethostname()` + `getaddrinfo` |
+| `127.x` guard on POSIX | none | yes |
 
-```
-connect(224.0.0.251:5353) -> local=127.0.0.1      <-- what mdnsd asks for
-connect(8.8.8.8:53)       -> local=192.168.1.107  <-- unicast works fine
-connect(192.168.1.1:53)   -> local=192.168.1.107
-```
+**Remaining risk** [inference]: on a machine whose only gateway-owning NIC has a description
+containing `Virtual`/`vEthernet` — a Hyper-V **External** switch, some VPN adapters —
+upstream picks nothing and publishes no A record; 0001 would have picked that adapter.
+Whether iOS still resolves the service then is not measured. It is listed in
+`docs/MANUAL-VERIFY.md` ("Upstream 4e95a9e"). If it bites, the fix is a small new patch
+("`addr == 0` → fallback"), not a revival of 0001.
 
-`mdnsd->ipv4_addr` therefore becomes `127.0.0.1` (`mdnsd.c:992`), and that one value is
-consumed in three places, each of which independently breaks discovery:
+Measured 2026-10-17 on this machine (Realtek Ethernet + two VMware host-only adapters,
+`VMware Virtual Ethernet Adapter …`): `scripts/smoke-test.ps1` saw the receiver advertised
+at `192.168.1.106`, the Ethernet address.
 
-1. **`mdnsd.c:246`** — published as the host `A` record. Remote clients are told the
-   AirPlay server is at `127.0.0.1`, i.e. at *themselves*.
-2. **`mdnsd.c:454-458`** — installed as `IP_MULTICAST_IF`. Announcements are transmitted
-   on the loopback adapter and never reach the wire.
-3. **`mdnsd.c:471-486`** — used as the `IP_ADD_MEMBERSHIP` interface. The process joins
-   `224.0.0.251` on loopback only, so queries arriving on the Ethernet adapter are never
-   delivered — even though the socket *is* correctly bound to `INADDR_ANY:5353`.
-
-Point 3 is why the symptom looks like a firewall problem: the process is visibly listening
-on `0.0.0.0:5353` in `netstat -ano`, yet it answers nothing from the LAN.
-
-The fix asks the IP Helper API (`GetAdaptersAddresses`) for the *up, non-loopback,
-IPv4-enabled* adapter that owns a default gateway, breaking ties on the lowest
-`Ipv4Metric`. `169.254.0.0/16` (APIPA) and `127.0.0.0/8` addresses are skipped.
-
-### Defect 2 — a loopback address was never rejected
-
-Even when the probe misfires, nothing downstream sanity-checks the result. The patch adds
-a hard guard: a `127.x.x.x` result is discarded (both platforms — a loopback A record is
-never correct for a service advertisement), and on Windows a final
-`getaddrinfo(gethostname(), AF_INET)` fallback is tried before giving up. `mdns_add_a()`
-already skips a zero address (`mdnsd.c:201-203`), so the worst case degrades to
-"no A record" instead of "actively wrong A record".
-
-### What the patch deliberately does *not* change
-
-* **The 5353 bind is already correct.** `SO_REUSEADDR` is set at `mdnsd.c:447`, *before*
-  the `bind()` at `mdnsd.c:465`, and the bind targets `INADDR_ANY:5353` (`mdnsd.c:460-463`).
-  Windows permits several processes to share UDP 5353 as long as every one of them set
-  `SO_REUSEADDR`, which `svchost` (Windows' own mDNS/DNS-SD client) does. Confirmed on this
-  machine: uxplay.exe appears in `netstat -ano` alongside `svchost`, Brave and Spotify.
-  No `SO_EXCLUSIVEADDRUSE` change is needed and none is made.
-* **Bind failures are already reported.** `mdns_open_socket4()` returns `-WSAGetLastError()`
-  (`mdnsd.c:465-469`), `mdnsd_start()` propagates it (`mdnsd.c:1007-1010`), and
-  `dnssd_error_text()` prints it (`lib/mdnsd/dnssd_mdnsd.c:351-357`). The `mdnsd` library
-  has no `logger_t` handle, so routing this through the library logger would mean changing
-  `mdnsd_init()`'s signature — out of scope for a minimal fix.
-* **IPv6 stays disabled on Windows.** `mdns_get_default_ipv6()` is a `#ifdef WIN32` stub
-  returning 0 (`mdnsd.c:377-380`), so `mdns_open_socket6()` is never opened and no `AAAA`
-  record is published. iOS discovers over IPv4 mDNS fine, so this is a known gap, not a
-  blocker. Fixing it means a second `GetAdaptersAddresses` walk for link-local IPv6 plus
-  the scope id — a separate patch if it ever proves necessary.
+What 0001 deliberately did not change still holds at `4e95a9e`: `SO_REUSEADDR` before
+`bind()` (`mdnsd.c:493`, `:511`, bind to `INADDR_ANY:5353`), bind errors returned as
+`-SOCKET_GET_ERROR()` (`mdnsd.c:511-515`), and IPv6 off on Windows
+(`mdns_get_default_ipv6()` returns 0 under `WIN32`, `mdnsd.c:421-426`).
 
 ---
 
 ## `0003-uxplay-utf8-argv-manifest.patch` — non-ASCII `-n <name>` was unusable on Windows
 
 `parse_arguments()` rejects any argv element that is not valid UTF-8
-(`uxplay.cpp:1204-1210`, `exit(0)`), and `-n` rejects a non-UTF-8 server name again at
-`:1239-1243`. That check is correct — the problem is what reaches it.
+(`uxplay.cpp:1490-1494`, `exit(0)`), and `-n` rejects a non-UTF-8 server name again at
+`:1522-1526`. That check is correct — the problem is what reaches it.
 
 `uxplay.exe` is linked without `-municode`, so the CRT builds `argv[]` from
 `GetCommandLineA()`, i.e. the UTF-16 command line converted to the process **ANSI code
@@ -119,12 +102,12 @@ An external `uxplay.exe.manifest` next to the binary was tried first and does **
 Not a defect fix: a hook we need and upstream has no reason to want.
 
 A client whose screen is off keeps the RTSP session alive and keeps requesting feedback
-(`uxplay.cpp:535-556` therefore stays quiet); what it stops is sending video. The only
+(`feedback_callback()`, `uxplay.cpp:575-598`, therefore stays quiet); what it stops is sending video. The only
 evidence upstream offers is the client's own `-FPSdata` report, where `submitSurfaceFPS`
 drops to 0 — but those arrive once a second, and waiting for two of them to be sure meant
 the front-end reacted 2-3 seconds late.
 
-`video_process()` (`uxplay.cpp:2338`) runs once per frame. The patch stamps
+`video_process()` (`uxplay.cpp:2729`) runs once per frame. The patch stamps
 `last_video_frame_time` there and adds a 200 ms GLib timer that logs one line each way:
 
 ```
@@ -161,16 +144,16 @@ Silent while no frames arrive (screen off), which `0004` already reports separat
 From the repo root, against a clean submodule checkout:
 
 ```bash
-git -C third_party/UxPlay apply ../../patches/0001-mdnsd-windows-iface.patch
+git -C third_party/UxPlay apply ../../patches/0002-uxplay-handle-ctrl-break.patch
 ```
 
-Paths inside the patch are relative to the submodule root (`lib/mdnsd/mdnsd.c`), hence the
+Paths inside the patch are relative to the submodule root (`uxplay.cpp`), hence the
 `../../` on the patch file itself.
 
 ### Line endings
 
 `.gitattributes` sets `* text=auto eol=lf`, but the *submodule* has no `.gitattributes` and
-the global `core.autocrlf` is `true`, so `third_party/UxPlay/lib/mdnsd/mdnsd.c` sits in the
+the global `core.autocrlf` is `true`, so `third_party/UxPlay/uxplay.cpp` sits in the
 working tree with **CRLF** endings while the patch is stored with LF. `git apply` handles
 this correctly — verified against a synthetic LF-blob/CRLF-worktree repo. Plain
 `patch -p1` may not; prefer `git apply`.
@@ -222,8 +205,9 @@ USE_DNS_SD=1 ./scripts/build.sh
 ```
 
 `scripts/build.sh` already supports this (`-DUSE_DNS_SD=1`, selected at
-`third_party/UxPlay/CMakeLists.txt:51`); it needs the Bonjour SDK for Windows installed.
-This should not be necessary — patch `0001` was verified to fix discovery on this machine —
+`third_party/UxPlay/CMakeLists.txt:57`); it needs the Bonjour SDK for Windows installed.
+This should not be necessary — discovery works with the bundled responder (upstream `8d62eba`,
+formerly our `0001`; smoke test 2026-10-17) —
 but it remains the escape hatch if another process ever does hold UDP 5353 exclusively
 (i.e. bound it *without* `SO_REUSEADDR`), which would make `mdns_open_socket4()`'s `bind()`
 fail with `WSAEADDRINUSE` (10048). Diagnose that case by correlating the PIDs from

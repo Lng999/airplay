@@ -1,8 +1,8 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 388b47b..f53d338 100644
+index eafd266..56971ce 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -78,7 +78,17 @@ if  ( GST_MACOS )
+@@ -85,7 +85,17 @@ if  ( GST_MACOS )
       message ( STATUS "define GST_MACOS" )
  endif()
  
