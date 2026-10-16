@@ -5,6 +5,9 @@
 //     must never touch HWNDs from inside the callback, and it must never call stop() from inside
 //     the callback (stop() joins the reader thread => self-join deadlock).
 //   * start()/stop() are serialised by a lifecycle mutex; state()/pid()/isRunning() are lock-free.
+//   * State transitions are serialised by stateMutex (setState/transition), so the reader and
+//     stop() cannot interleave a read-compare-write, and StateChanged events leave in the order
+//     the transitions happened.
 #include "airplay/uxplay_host.h"
 
 #include <windows.h>
@@ -81,6 +84,7 @@ std::string lastErrorText(const char* what, DWORD code) {
 
 struct UxplayHost::Impl {
     std::mutex              lifecycle;      // serialises start()/stop()
+    std::mutex              stateMutex;     // serialises state transitions (see setState)
     std::mutex              cbMutex;
     HostEventCallback       cb;
 
@@ -134,14 +138,33 @@ struct UxplayHost::Impl {
 
     HostState get() const { return static_cast<HostState>(state.load(std::memory_order_acquire)); }
 
-    void setState(HostState s) {
-        const HostState prev = get();
-        if (prev == s) return;
+    // Every transition goes through here, under stateMutex. The event is emitted under the lock
+    // too, so two threads cannot publish their StateChanged events in the opposite order to
+    // their stores. The callback only posts (see the threading contract) and never re-enters.
+    // Once stop() has raised stopRequested, the reader's session transitions (Waiting,
+    // Connected) are refused: they would land between Stopping and Stopped.
+    void setStateLocked(HostState s) {
+        if (get() == s) return;
+        if (stopRequested.load(std::memory_order_acquire) &&
+            (s == HostState::Waiting || s == HostState::Connected))
+            return;
         state.store(static_cast<int>(s), std::memory_order_release);
         HostEvent ev;
         ev.kind = HostEventKind::StateChanged;
         ev.state = s;
         emit(ev);
+    }
+
+    void setState(HostState s) {
+        std::lock_guard<std::mutex> lk(stateMutex);
+        setStateLocked(s);
+    }
+
+    // Compare-and-set: move to `to` only if the current state is `from1` or `from2`.
+    void transition(HostState from1, HostState from2, HostState to) {
+        std::lock_guard<std::mutex> lk(stateMutex);
+        const HostState cur = get();
+        if (cur == from1 || cur == from2) setStateLocked(to);
     }
 
     void closeHandlesLocked() {
@@ -214,21 +237,18 @@ struct UxplayHost::Impl {
         // "using network ports" (uxplay.cpp:3205), and the ports line is only printed when udp[0]
         // is set, i.e. when -p was passed. buildArgs() always passes -p, so Ports is the reliable
         // "server is up" marker and the banner only confirms the child started.
-        const HostState cur = get();
+        // Each check-and-move is one atomic transition(); stop() may be changing the state on
+        // another thread at the same moment.
         switch (parsed.tag) {
         case LineTag::Ports:
-            if (cur == HostState::Starting) setState(HostState::Waiting);
+            transition(HostState::Starting, HostState::Starting, HostState::Waiting);
             break;
         case LineTag::ClientInfo:
-            if (cur == HostState::Starting || cur == HostState::Waiting) {
-                setState(HostState::Connected);
-            }
+            transition(HostState::Starting, HostState::Waiting, HostState::Connected);
             break;
         case LineTag::LostConnection:
-            if (cur == HostState::Connected) setState(HostState::Waiting);
-            break;
         case LineTag::Stopping:
-            if (cur == HostState::Connected) setState(HostState::Waiting);
+            transition(HostState::Connected, HostState::Connected, HostState::Waiting);
             break;
         default:
             break;
@@ -432,11 +452,12 @@ bool UxplayHost::start(const HostConfig& cfg, std::string* err) {
         return fail(lastErrorText("CreateProcessW", createErr));
     }
 
-    // Kill-on-close job: when the GUI dies, however it dies, the OS takes the receiver with
-    // it. The child is not created suspended, so it is already running by the time it joins
-    // the job; that is fine, the job only has to be in place before we could die. A failure
-    // here is not fatal - the receiver still runs, it just loses that orphan protection -
-    // but it is reported, since nothing else would ever show it.
+    // Kill-on-close job: once the child is in it, the OS takes the receiver with the GUI
+    // however the GUI dies. The child is not created suspended, so there is a short window
+    // between CreateProcessW and AssignProcessToJobObject in which a GUI that dies leaves an
+    // orphan behind. Closing that gap means CREATE_SUSPENDED + ResumeThread after the
+    // assignment; not done yet. A failure here is not fatal - the receiver still runs, it just
+    // loses that orphan protection - but it is reported, since nothing else would ever show it.
     std::string jobWarning;
     impl_->hJob = CreateJobObjectW(nullptr, nullptr);
     if (!impl_->hJob) {
