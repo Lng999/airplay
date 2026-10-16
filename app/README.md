@@ -10,13 +10,20 @@ See `docs/PHASE2-SPEC.md`, `docs/PHASE2-M2-SPEC.md` and `docs/DESIGN.md` §6.1.
 app/
   include/airplay/uxplay_host.h   contract between the UI and the host (orchestrator owns it)
   src/host/                       child-process host: CreateProcess, stdout reader, line parser
-  src/ui/                         this GUI (window, tray, config, log, single instance)
+  src/ui/                         this GUI (window, tray, config, log, single instance):
+                                  main_window, tray, config_store, ui_log, single_instance,
+                                  strings.h (the Turkish UI text)
+  src/ui/updater.*                GitHub release check, download, silent reinstall
+  src/ui/stale_receivers.*        Start kills any leftover uxplay.exe (see below)
+  src/ui/host_stub.cpp            fake host for -DAIRPLAY_HOST_STUB=ON builds
   src/ui/video_embed.*            find the receiver's window and adopt it (or hand it back)
   src/ui/video_window.*           the window the picture lives in
   src/ui/device_frames.*          which phone is connected, and the shape of its frame
   src/ui/autostart.*              the HKCU Run value behind "start with Windows"
   res/                            app.rc + app.manifest (Common Controls v6, PerMonitorV2, asInvoker)
-  tests/                          host unit tests + a live test that spawns the real receiver
+  tests/                          unit tests (host parser/argv, device frames) and three
+                                  live tests run by hand (real receiver, window adoption,
+                                  release flash)
 ```
 
 ## Build
@@ -54,9 +61,15 @@ window without a built receiver. It is a development aid, never a specification.
 `app/CMakeLists.txt` adds `app/tests` automatically when the real host is used:
 
 ```bash
-ctest --test-dir build-app                 # airplay_host_tests (unit)
-./build-app/tests/airplay_host_live.exe    # spawns the real uxplay.exe, needs a LAN
+ctest --test-dir build-app                       # airplay_host_tests + airplay_frame_tests (unit)
+./build-app/tests/airplay_host_live.exe [uxplay.exe]   # spawns the real receiver, needs a LAN
+./build-app/tests/airplay_embed_live.exe [gst-launch]  # adopt/letterbox/frame/hide/release, 34 checks
+./build-app/tests/airplay_release_flash.exe [gst-launch]  # nothing half-finished on screen, 9 checks
 ```
+
+Only the two unit binaries are registered with ctest. The three live tests need a built
+receiver or GStreamer on disk (and a GPU that can present, for the last two), so they are
+run by hand; see the comments in `app/tests/CMakeLists.txt`.
 
 ## Run
 
@@ -128,8 +141,12 @@ is in `docs/PHASE2-M2-SPEC.md`; in short:
   keeps the aspect (`WM_SIZING`). **F11**, **Alt+Enter**, a double click, or the entry added
   to the window's own system menu toggle fullscreen; **Esc** leaves it. *Her zaman üstte*
   now applies to this window too.
-- Closing the picture window hands the receiver's window back to the desktop and does not
-  end the session; it is not adopted again until the next Start.
+- Closing the picture window (X) only **hides** it. The receiver's window stays adopted
+  inside it and goes dark with it, and the session - audio included - carries on; handing
+  it back to the desktop would look like the window just closed reopening itself. The tray
+  menu's *Görüntüyü göster* (listed only while the picture is hidden) brings it back, and so
+  does ticking *Görüntüyü uygulamada göster* again. A balloon says so the first time
+  (`[app] picture_hint_shown`).
 - Release always happens **before** the child is stopped. By then the guest is our child
   window, and Windows destroys child windows along with their parent — including one that
   belongs to another process, which the sink does not expect.
@@ -137,7 +154,8 @@ is in `docs/PHASE2-M2-SPEC.md`; in short:
 
 `app/tests/test_embed_live.cpp` exercises the whole path against a real `d3d11videosink`
 (a `videotestsrc` pipeline standing in for the receiver) — find, adopt, letterbox, aspect,
-release, and that the other process survives all of it.
+closing the picture hides it instead of releasing, release, and that the other process
+survives all of it.
 
 ### The device frame
 
@@ -195,8 +213,8 @@ This is also why **Bağlantı zaman aşımı defaults to off**: with UxPlay's ow
 session was declared lost while the phone was just asleep.
 
 - **Close button hides to the notification area.** A balloon says so the first time
-  (`[app] tray_hint_shown`). The tray menu (right click) has Göster / Başlat / Durdur /
-  Çıkış; only **Çıkış** really quits, and it stops the child first.
+  (`[app] tray_hint_shown`). The tray menu (right click) has Göster / Görüntüyü göster (only
+  while the picture is hidden) / Başlat / Durdur / Güncellemeleri kontrol et / Çıkış; only **Çıkış** really quits, and it stops the child first.
 - **Second launch** does not start a second GUI: it raises the first window
   (named mutex + `FindWindowW("AirplayGuiMainWindow")`).
 - **Copy cmdline** puts the exact argv the host would use on the clipboard — handy for
@@ -258,6 +276,7 @@ autostart_receiver=0
 show_advanced=0     ; collapsible sections, written the moment they are toggled
 show_details=0
 tray_hint_shown=0   ; the one-shot "still running in the tray" balloon
+picture_hint_shown=0 ; the one-shot "picture hidden, still mirroring" balloon
 auto_update=1       ; check GitHub for a newer release ~4 s after the window is up.
                     ; 0 only disables the startup check; the tray menu item still works.
 embed_video=1       ; show the picture in our own window (see "The picture window").

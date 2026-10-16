@@ -10,11 +10,13 @@ Her satır: `[ ]` bekliyor · `[x] YYYY-MM-DD` doğrulandı · `[!]` başarısı
 - [x] 2026-08-21 Ses geldi (kullanıcı raporu)
 - [ ] Döndürme (portrait↔landscape) düzgün
 - [ ] iPhone'dan "Yansıtmayı Durdur" → uxplay temiz şekilde beklemeye dönüyor, tekrar bağlanabiliyor
-- [ ] **Telefon uykusu:** yansıtma sürerken yan tuşla ekranı kapat → PC'deki görüntü **ve ses**
-      **yarım saniye** içinde kesiliyor, durum "Duraklatıldı" (turuncu nokta); telefonu aç → ikisi de
-      kendiliğinden geri geliyor ve odak çalınmıyor
+- [ ] **Telefon uykusu:** yansıtma sürerken yan tuşla ekranı kapat → GUI bilerek hiçbir şey
+      yapmıyor: durum `Bağlandı` (yeşil nokta) kalıyor, görüntü penceresi yerinde, son kare
+      donuk; telefonu aç → görüntü kendiliğinden devam ediyor, odak çalınmıyor
+      (`app/README.md` "Sleeping phone")
 - [ ] Bağlıyken durum satırında gerçek kare hızı görünüyor (ör. "· 44 fps") ve makul
-- [ ] Günlükte "mirror stalled" / "mirror resumed" satırları görünüyor (patches/0004 yolu)
+- [ ] Ayrıntılar günlüğünde `mirror idle:` / `mirror active:` satırları görünüyor (patches/0004
+      yolu; yalnız günlüğe gidiyor, arayüz bunlara tepki vermiyor)
 - [ ] Pencere başlığında, görev çubuğunda ve bildirim alanında yeni ikon görünüyor
 - [ ] Telefonu 1 dakikadan uzun kapalı tut → açınca yine geri geliyor (zaman aşımı Kapalı)
 - [ ] Gecikme kabul edilebilir (ms tahmini not edilsin)
@@ -41,7 +43,9 @@ Her satır: `[ ]` bekliyor · `[x] YYYY-MM-DD` doğrulandı · `[!]` başarısı
 
 ## Phase 2 M2 — Görüntü kendi penceremizde (`docs/PHASE2-M2-SPEC.md`)
 Ajan tarafı doğrulandı: `app/tests/test_embed_live.cpp` gerçek `d3d11videosink` penceresini
-bulup evlat ediniyor, oranı koruyor, geri veriyor — 15/15 PASS (2026-08-22, videotestsrc ile).
+bulup evlat ediniyor, oranı koruyor, X'te gizliyor, geri veriyor — ilk sürüm 15/15 PASS
+(2026-08-22, videotestsrc ile); çerçeve ve gizleme kontrolleri eklendikten sonra 34/34 PASS
+(2026-10-17).
 Aşağıdakiler yalnız iPhone ile görülebilir:
 - [ ] iPhone bağlanınca görüntü **uygulamanın penceresinde** açılıyor (masaüstünde ayrı
       "Direct3D11 renderer" penceresi kalmıyor)
@@ -54,8 +58,9 @@ Aşağıdakiler yalnız iPhone ile görülebilir:
 - [ ] iPhone'dan yansıtmayı durdur → görüntü penceresi kendiliğinden kapanıyor, durum
       "Hazır"a dönüyor; tekrar bağlanınca pencere yeniden açılıyor
 - [ ] Durdur → görüntü penceresi kapanıyor, masaüstünde yetim pencere kalmıyor
-- [ ] Görüntü penceresini X ile kapat → oturum devam ediyor, görüntü alıcının kendi
-      penceresine dönüyor (o oturumda tekrar içeri alınmıyor)
+- [ ] Görüntü penceresini X ile kapat → oturum ve ses devam ediyor, pencere yalnızca
+      gizleniyor (masaüstünde alıcının kendi penceresi açılmıyor), ilk seferde bilgi balonu
+      çıkıyor; bildirim alanı simgesi sağ tık → `Görüntüyü göster` görüntüyü geri getiriyor
 - [ ] `Görüntüyü uygulamada göster` kutusunu yansıtma sürerken kapat → görüntü anında
       alıcının kendi penceresine dönüyor; tekrar aç → geri alınıyor
 - [ ] Görüntü penceresinin konumu/boyutu kapanışta hatırlanıyor (`[video]` bölümü)
