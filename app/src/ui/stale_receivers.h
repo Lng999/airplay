@@ -15,6 +15,7 @@ namespace ui {
 
 // Terminates every running process whose image is exePath, except the calling process.
 // Returns how many were terminated. Best-effort: processes we may not open are skipped.
+// Does nothing (returns 0) unless exePath's file name is uxplay.exe, case-insensitively.
 int killStaleReceivers(const std::wstring& exePath);
 
 } // namespace ui

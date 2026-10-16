@@ -32,13 +32,19 @@ std::wstring imagePath(HANDLE process) {
 int killStaleReceivers(const std::wstring& exePath) {
     if (exePath.empty()) return 0;
 
+    const size_t slash = exePath.find_last_of(L"\\/");
+    const std::wstring leaf = (slash == std::wstring::npos) ? exePath : exePath.substr(slash + 1);
+
+    // exePath comes from config.ini, where [app] uxplay_path only has to name an existing
+    // file. Refuse anything that is not uxplay.exe, or a typo such as explorer.exe there
+    // would close every copy of that program the moment the user presses Start.
+    if (!samePath(leaf, L"uxplay.exe")) return 0;
+
     HANDLE snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (snap == INVALID_HANDLE_VALUE) return 0;
 
     // Match on the file name first (cheap) and only then open the process to compare the
     // full path - so an unrelated uxplay.exe from somewhere else is left alone.
-    const size_t slash = exePath.find_last_of(L"\\/");
-    const std::wstring leaf = (slash == std::wstring::npos) ? exePath : exePath.substr(slash + 1);
 
     const DWORD self = GetCurrentProcessId();
     int killed = 0;
