@@ -112,3 +112,21 @@ Type: files; Name: "{userstartup}\airplay.lnk"
 ; The GStreamer plugin cache the app builds on first run. Settings and logs under
 ; %APPDATA%\airplay and %LOCALAPPDATA%\airplay are left alone - a reinstall should find them.
 Type: files; Name: "{localappdata}\airplay\gst-registry.bin"
+
+[Code]
+const
+  RunKey = 'Software\Microsoft\Windows\CurrentVersion\Run';
+
+// uninsdeletevalue above only covers a Run value this installer wrote (the "startup" task).
+// The app's own "Windows açılışında başlat" checkbox writes the very same value, and that one
+// would outlive the uninstall and point at a deleted exe on every logon. Remove it too - but
+// only when it names this install's exe, so a portable copy elsewhere keeps its entry.
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  Cmd: String;
+begin
+  if CurUninstallStep = usUninstall then
+    if RegQueryStringValue(HKCU, RunKey, 'airplay', Cmd) then
+      if Pos(Lowercase(ExpandConstant('{app}\{#MyAppExeName}')), Lowercase(Cmd)) > 0 then
+        RegDeleteValue(HKCU, RunKey, 'airplay');
+end;
