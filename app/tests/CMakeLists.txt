@@ -18,7 +18,7 @@ set_target_properties(airplay_host_tests PROPERTIES CXX_STANDARD 17 CXX_STANDARD
 # ---- live test: spawns the real uxplay.exe on the LAN for a few seconds ---------------------------
 # Deliberately NOT registered with add_test(): it needs a built receiver, opens real sockets and
 # advertises over mDNS. Run it by hand:
-#   ./build-host/tests/airplay_host_live.exe C:/Users/pc/Desktop/airplay/build/uxplay.exe
+#   ./build-host/tests/airplay_host_live.exe <repo>/build/uxplay.exe
 add_executable(airplay_host_live test_host_live.cpp)
 target_link_libraries(airplay_host_live PRIVATE airplay_host shell32)
 target_include_directories(airplay_host_live PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src/host)

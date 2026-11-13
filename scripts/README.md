@@ -6,7 +6,7 @@ firewall, launch the receiver. Run them in this order.
 | # | Command | What it does |
 |---|---|---|
 | 1 | `pwsh -File scripts/setup-msys2.ps1` | Silently installs MSYS2 to `C:\msys64`, runs `pacman -Syuu` twice, installs the UCRT64 toolchain + GStreamer, prints tool versions. |
-| 2 | `C:\msys64\usr\bin\bash.exe -lc "cd /c/Users/pc/Desktop/airplay && ./scripts/build.sh"` | Configures with Ninja/Release/`-DNO_MARCH_NATIVE=ON` and builds `build\uxplay.exe`. |
+| 2 | `C:\msys64\usr\bin\env.exe MSYSTEM=UCRT64 CHERE_INVOKING=1 /usr/bin/bash -lc "bash scripts/build.sh"` (from the repo root, after `git submodule update --init`) | Applies `patches/`, configures with Ninja/Release/`-DNO_MARCH_NATIVE=ON` and builds `build\uxplay.exe`. The same line with `scripts/build-app.sh` builds the GUI into `build-app\airplay-gui.exe`. |
 | 3 | `pwsh -File scripts/firewall-rules.ps1` *(elevated)* | Creates the inbound rules the iPhone needs. |
 | 4 | `pwsh -File scripts/run-uxplay.ps1` | Launches `uxplay.exe` with PATH, `HOME` and GStreamer env prepared. |
 | 5 | `pwsh -File scripts/smoke-test.ps1` | Device-free checks (GStreamer plugins, mDNS announcement). |

@@ -2,11 +2,13 @@
 #
 # Builds the pinned UxPlay submodule into ./build/uxplay.exe.
 #
-# MUST run inside the MSYS2 UCRT64 environment, e.g. from Windows:
-#   C:\msys64\usr\bin\bash.exe -lc "cd /c/Users/pc/Desktop/airplay && ./scripts/build.sh"
-# with MSYSTEM=UCRT64 exported first (or simply use C:\msys64\ucrt64.exe -c "...").
+# MUST run inside the MSYS2 UCRT64 environment, e.g. from cmd/PowerShell in the repo root:
+#   C:\msys64\usr\bin\env.exe MSYSTEM=UCRT64 CHERE_INVOKING=1 /usr/bin/bash -lc "bash scripts/build.sh"
+# (or from a UCRT64 shell, C:\msys64\ucrt64.exe: cd to the repo, then bash scripts/build.sh).
 # MSYSTEM must be set BEFORE the login shell starts so /ucrt64/bin is on PATH
-# (docs/research/gstreamer-msys2-windows.md section 2).
+# (docs/research/gstreamer-msys2-windows.md section 2). CHERE_INVOKING=1 keeps the login
+# shell in the current directory; when called from Git Bash it does not, so cd with an
+# absolute path inside -lc there instead.
 #
 # Optional environment:
 #   USE_DNS_SD=1   build against Apple Bonjour dns_sd.h instead of the bundled
