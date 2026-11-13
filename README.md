@@ -6,7 +6,7 @@ Durum (2026-08-22): Phase 0 tamam (MSYS2/UCRT64 build + duman testi yeşil), **i
 
 Tek tıkla çalıştırma: **`AirPlay.bat`** (çift tıkla; parametre geçirilebilir: `AirPlay.bat -Name "Salon-PC" -Debug`).
 
-Hızlı başlangıç: `scripts/setup-msys2.ps1` → `scripts/build.sh` (UCRT64) → `scripts/build-app.sh` → `build-app/airplay-gui.exe` (veya `scripts/run-uxplay.ps1`).
+Hızlı başlangıç: `git clone --recursive https://github.com/Lng999/airplay` (ya da klonladıktan sonra `git submodule update --init` — UxPlay bir submodule) → `scripts/setup-msys2.ps1` → `scripts/build.sh` (UCRT64) → `scripts/build-app.sh` → `build-app/airplay-gui.exe` (veya `scripts/run-uxplay.ps1`). İki betik de UCRT64 ortamında çalışmalı; depo kökünden: `C:\msys64\usr\bin\env.exe MSYSTEM=UCRT64 CHERE_INVOKING=1 /usr/bin/bash -lc "bash scripts/build.sh"` (ayrıntı: `scripts/README.md`).
 
 ## Kurulum (son kullanıcı)
 
