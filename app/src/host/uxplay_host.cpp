@@ -437,7 +437,10 @@ bool UxplayHost::start(const HostConfig& cfg, std::string* err) {
     si.hStdError = writeEnd;
 
     PROCESS_INFORMATION pi{};
-    const DWORD flags = CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT;
+    // Suspended until it is inside the kill-on-close job (below), so there is no moment in
+    // which a GUI that dies could leave a running receiver behind.
+    const DWORD flags = CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT |
+                        CREATE_SUSPENDED;
     const BOOL ok = CreateProcessW(cfg.uxplayExe.c_str(), cmdlineBuf.data(), nullptr, nullptr,
                                    TRUE, flags, envBlock.data(), nullptr, &si, &pi);
     const DWORD createErr = GetLastError();
@@ -453,11 +456,10 @@ bool UxplayHost::start(const HostConfig& cfg, std::string* err) {
     }
 
     // Kill-on-close job: once the child is in it, the OS takes the receiver with the GUI
-    // however the GUI dies. The child is not created suspended, so there is a short window
-    // between CreateProcessW and AssignProcessToJobObject in which a GUI that dies leaves an
-    // orphan behind. Closing that gap means CREATE_SUSPENDED + ResumeThread after the
-    // assignment; not done yet. A failure here is not fatal - the receiver still runs, it just
-    // loses that orphan protection - but it is reported, since nothing else would ever show it.
+    // however the GUI dies. The child was created suspended and is only resumed after the
+    // assignment, so it has not run a single instruction outside the job. A failure here is
+    // not fatal - the receiver still runs, it just loses that orphan protection - but it is
+    // reported, since nothing else would ever show it.
     std::string jobWarning;
     impl_->hJob = CreateJobObjectW(nullptr, nullptr);
     if (!impl_->hJob) {
@@ -475,6 +477,19 @@ bool UxplayHost::start(const HostConfig& cfg, std::string* err) {
             CloseHandle(impl_->hJob);
             impl_->hJob = nullptr;
         }
+    }
+
+    if (ResumeThread(pi.hThread) == static_cast<DWORD>(-1)) {
+        // A child that never runs would hold the pipe open forever and the reader would
+        // never see EOF; take it down and report the start as failed.
+        const DWORD e = GetLastError();
+        TerminateProcess(pi.hProcess, 1);
+        WaitForSingleObject(pi.hProcess, 5000);
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
+        CloseHandle(readEnd);
+        if (impl_->hJob) { CloseHandle(impl_->hJob); impl_->hJob = nullptr; }
+        return fail(lastErrorText("ResumeThread", e));
     }
 
     impl_->hProcess = pi.hProcess;
