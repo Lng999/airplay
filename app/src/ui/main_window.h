@@ -42,6 +42,9 @@ private:
 
     void createControls();
     void createFonts();
+    // Hands fontUi_/fontStatus_ to every control. createFonts() deletes the previous pair, so
+    // a control left out here would keep drawing with a deleted HFONT after a DPI change.
+    void applyFonts();
     void layout();
     void applySectionVisibility();
     void resizeToContent();

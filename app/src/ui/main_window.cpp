@@ -379,6 +379,10 @@ void MainWindow::createControls() {
                                reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_LIST_LOG)),
                                hinst_, nullptr);
 
+    applyFonts();
+}
+
+void MainWindow::applyFonts() {
     HWND all[] = {status_,     hint_,           lblName_,       editName_,      lblPort_,
                   editPort_,   lblVideo_,       cmbVideo_,      lblAudio_,      cmbAudio_,
                   chkFullscreen_, chkH265_,     chkDebug_,      chkAlwaysOnTop_, chkAutostart_,
@@ -1437,16 +1441,7 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
         case WM_DPICHANGED: {
             dpi_ = static_cast<int>(HIWORD(wp));
             createFonts();
-            for (HWND h : {status_, hint_, lblName_, editName_, lblPort_, editPort_,
-                           lblVideo_, cmbVideo_, lblAudio_, cmbAudio_, lblFps_, cmbFps_,
-                           lblDecoder_, cmbDecoder_, lblReset_, cmbReset_,
-                           chkFullscreen_,
-                           chkH265_, chkDebug_, chkAlwaysOnTop_, chkAutostart_, chkEmbed_,
-                           chkLogon_, btnToggle_, btnCopy_, secAdvanced_, secDetails_,
-                           listLog_})
-                if (h) SendMessageW(h, WM_SETFONT, reinterpret_cast<WPARAM>(fontUi_), TRUE);
-            if (status_)
-                SendMessageW(status_, WM_SETFONT, reinterpret_cast<WPARAM>(fontStatus_), TRUE);
+            applyFonts();
             const RECT* r = reinterpret_cast<const RECT*>(lp);
             SetWindowPos(hwnd_, nullptr, r->left, r->top, r->right - r->left,
                          r->bottom - r->top, SWP_NOZORDER | SWP_NOACTIVATE);
