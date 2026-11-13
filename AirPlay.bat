@@ -12,7 +12,10 @@ title AirPlay alicisi
 
 if not exist "build\uxplay.exe" (
     echo [HATA] build\uxplay.exe bulunamadi.
-    echo         Once derle:  C:\msys64\usr\bin\bash.exe -lc "cd /c/Users/pc/Desktop/airplay && bash scripts/build.sh"
+    echo         Once derle ^(MSYS2 UCRT64 gerekir: scripts\setup-msys2.ps1^):
+    echo             cd /d "%CD%"
+    echo             git submodule update --init
+    echo             C:\msys64\usr\bin\env.exe MSYSTEM=UCRT64 CHERE_INVOKING=1 /usr/bin/bash -lc "bash scripts/build.sh"
     echo.
     pause
     exit /b 1
