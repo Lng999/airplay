@@ -71,8 +71,20 @@ target_include_directories(airplay_frame_tests PRIVATE
 target_compile_options(airplay_frame_tests PRIVATE -Wall -Wextra)
 set_target_properties(airplay_frame_tests PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
 
+# ---- unit tests: the custom toggle / push button keep the BUTTON contract (hidden windows) ------
+add_executable(airplay_controls_tests
+    test_controls.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui/controls.cpp)
+target_link_libraries(airplay_controls_tests PRIVATE airplay_host user32 gdi32 d2d1 dwmapi advapi32)
+target_include_directories(airplay_controls_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include)
+target_compile_options(airplay_controls_tests PRIVATE -Wall -Wextra)
+set_target_properties(airplay_controls_tests PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
+
 add_test(NAME airplay_host_tests COMMAND airplay_host_tests)
 add_test(NAME airplay_frame_tests COMMAND airplay_frame_tests)
+add_test(NAME airplay_controls_tests COMMAND airplay_controls_tests)
 
 # ---- unit tests: updater URL allowlist, checksum parsing, version/JSON scanners -----------------
 # updater.cpp includes the generated version.h, which only exists when app/CMakeLists.txt is the

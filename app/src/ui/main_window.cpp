@@ -84,22 +84,6 @@ const wchar_t* const kDecoderValues[] = {L"", L"d3d11h264dec", L"nvh264dec", L"a
 const wchar_t* const kResetLabels[] = {str::kReset0, str::kReset15, str::kReset60};
 const int            kResetValues[] = {0, 15, 60};
 
-UINT dpiForWindow(HWND hwnd) {
-    using Fn = UINT(WINAPI*)(HWND);
-    if (HMODULE u32 = GetModuleHandleW(L"user32.dll")) {
-        auto fn = reinterpret_cast<Fn>(
-            reinterpret_cast<void*>(GetProcAddress(u32, "GetDpiForWindow")));
-        if (fn) {
-            UINT d = fn(hwnd);
-            if (d >= 72) return d;
-        }
-    }
-    HDC dc = GetDC(nullptr);
-    UINT d = dc ? static_cast<UINT>(GetDeviceCaps(dc, LOGPIXELSX)) : 96u;
-    if (dc) ReleaseDC(nullptr, dc);
-    return d ? d : 96u;
-}
-
 std::wstring getText(HWND h) {
     int n = GetWindowTextLengthW(h);
     if (n <= 0) return std::wstring();
