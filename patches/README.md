@@ -12,6 +12,7 @@ clean checkout on every build.
 | `0003-uxplay-utf8-argv-manifest.patch` | A non-ASCII `-n <name>` is rejected on Windows: argv arrives in the ANSI code page. |
 | `0004-uxplay-report-mirror-idle.patch` | Hook: says within 400 ms that video frames stopped or resumed. |
 | `0005-uxplay-report-video-stats.patch` | Hook: reports the video bitrate and frame rate once a second. |
+| `0006-mdnsd-windows-default-route-iface.patch` | mDNS announced the receiver on a VPN adapter instead of the LAN; prefer the default-route adapter. |
 | `0007-uxplay-report-stream-size.patch` | Hook: reports the stream size at INFO whenever the client changes the stream format. |
 
 `0002`–`0005` were regenerated against `4e95a9e` on 2026-10-17 (`git diff` per patch on top of
@@ -139,6 +140,31 @@ mirror stats: 12480 kbps 59 fps
 Silent while no frames arrive (screen off), which `0004` already reports separately.
 `app/src/host/line_parser.cpp` turns the line into a `MirrorStats` event and the GUI puts
 `· 12.5 Mbps · 59 fps` on the status line.
+
+## `0006-mdnsd-windows-default-route-iface.patch` — a VPN adapter took the announcement
+
+`mdns_get_default_ipv4()` on `_WIN32` takes the **first** adapter that is up, not loopback,
+has a gateway and whose description has none of `Hyper-V`/`Virtual`/`WSL`/`vEthernet`
+(`third_party/UxPlay/lib/mdnsd/mdnsd.c:372-388` @`4e95a9e`). That address becomes the A
+record, `IP_MULTICAST_IF` and the `IP_ADD_MEMBERSHIP` interface (see the 0001 section above),
+so the one adapter picked is the only network the receiver is announced on.
+
+A VPN client that installs its own Ethernet-type adapter with a gateway, and whose
+description contains none of those words, passes the filter. When that adapter is
+enumerated before the LAN adapter, the receiver is announced on the VPN subnet only and
+iOS devices on the LAN never list it. Observed on a test machine: with the VPN adapter
+present the announcement carried the VPN address; with it removed, the LAN address, and the
+iPhone connected.
+
+The patch first asks `GetBestInterface()` which interface a packet to `8.8.8.8` would leave
+through - a route lookup, nothing is sent - and takes that adapter if it also passes the
+filters above; otherwise it falls back to upstream's first match. A split-tunnel VPN does not
+own the default route, so the LAN adapter wins. A full-tunnel VPN does own it, and then
+nothing changes compared with upstream (LAN discovery cannot work through it anyway).
+
+Verified without an iPhone: built with all six patches, the receiver is announced at the
+LAN address and `Find-NetRoute -RemoteIPAddress 8.8.8.8` names the same adapter. The VPN case
+itself has not been re-run with the patch - `docs/MANUAL-VERIFY.md` lists it.
 
 ## `0007-uxplay-report-stream-size.patch` — the stream changes shape mid-session
 

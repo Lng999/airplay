@@ -103,6 +103,9 @@ iPhone ister. Her maddede iOS sürümünü not et.
       yayınlanmıyor (`mdnsd.c:374-380` @`4e95a9e`, okuyarak çıkarım). Böyle bir makinede iPhone
       alıcıyı görüyor ve bağlanabiliyor mu? (Bu makinede yok: Ethernet Realtek, VMware host-only
       adaptörlerinin gateway'i yok)
+- [ ] **VPN adaptörü (`patches/0006`):** kendi Ethernet adaptörünü kuran split-tunnel bir VPN
+      bağlıyken `scripts/mdns-browse.py` alıcıyı LAN adresinde gösteriyor ve iPhone listede
+      görüp bağlanabiliyor (0006'sız build'de ilan VPN adresinde çıkıyordu, iPhone görmüyordu)
 - [ ] **Akış boyutu değişince (`patches/0007`):** yansıtma sürerken Fotoğraflar'da bir foto/video
       aç → görüntü küçülmüyor, telefon ekranı çerçeveyi dolduruyor; günlükte
       `resolution: ...` satırı çıkıyor. Kapatınca yine dolu

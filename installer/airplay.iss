@@ -116,6 +116,24 @@ Type: files; Name: "{localappdata}\airplay\gst-registry.bin"
 [Code]
 const
   RunKey = 'Software\Microsoft\Windows\CurrentVersion\Run';
+  // app/src/ui/single_instance.h kMutexName - keep the two in step.
+  AppMutexName = 'Local\airplay-gui-7c1d9d0e-1f4d-4f1f-9d7e-airplay';
+
+// CloseApplications only acts in Setup; the uninstaller never closes anything, so a running
+// GUI kept its exe locked and the uninstall finished with airplay-gui.exe left behind and
+// everything it needs gone. Not the AppMutex directive: Setup would check it too, and the
+// update path runs Setup while the app is still up. Suppressible with IDCANCEL as the default,
+// like Inno's own check: /SUPPRESSMSGBOXES must cancel, not loop on a box nobody sees.
+function InitializeUninstall(): Boolean;
+begin
+  Result := True;
+  while CheckForMutexes(AppMutexName) do
+    if SuppressibleMsgBox(FmtMessage(SetupMessage(msgUninstallAppRunningError), ['{#MyAppName}']),
+                          mbError, MB_OKCANCEL, IDCANCEL) <> IDOK then begin
+      Result := False;
+      Exit;
+    end;
+end;
 
 // uninsdeletevalue above only covers a Run value this installer wrote (the "startup" task).
 // The app's own "Windows açılışında başlat" checkbox writes the very same value, and that one
