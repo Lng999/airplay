@@ -31,9 +31,8 @@ jobs:
     defaults:
       run:
         shell: msys2 {0}
-    env:
-      GH_TOKEN: ${{ github.token }}
     steps:
+      # The checkout's persisted credentials are what `git push origin <tag>` uses later.
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -56,7 +55,8 @@ jobs:
       - name: Set up MSYS2 (UCRT64)
         if: steps.ver.outputs.exists == 'false'
         id: msys2
-        uses: msys2/setup-msys2@v2
+        # Pinned: this job holds a write token. Same commit as the v2 tag (v2.33.0).
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
         with:
           msystem: UCRT64
           update: true
@@ -90,6 +90,8 @@ jobs:
       - name: Package and publish
         if: steps.ver.outputs.exists == 'false'
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}   # gh in publish-release.ps1; only this step needs it
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
