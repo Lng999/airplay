@@ -945,7 +945,8 @@ format), and develop `uxplay_core` in parallel behind the same GUI abstraction, 
 - Every `_WIN32` block in `uxplay.cpp` and what it does — §5.2.
 - The `HOME`/`XDG_CONFIG_HOMEDIR` trap and its four consequences — §5.3.
 - All logging is `printf` to stdout, UTF-8 and unbuffered on Windows without `-d` — §6.1.
-- Resolution and the effective features code are logged only at DEBUG level — §6.1.
+- The effective features code is logged only at DEBUG level — §6.1. The resolution is
+  logged at INFO by `patches/0007` whenever the stream format changes.
 - All eight Milestone-2 blockers — §6.2.
 
 ### Assumed / UNVERIFIED — must be confirmed before we rely on it

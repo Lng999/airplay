@@ -103,6 +103,9 @@ iPhone ister. Her maddede iOS sürümünü not et.
       yayınlanmıyor (`mdnsd.c:374-380` @`4e95a9e`, okuyarak çıkarım). Böyle bir makinede iPhone
       alıcıyı görüyor ve bağlanabiliyor mu? (Bu makinede yok: Ethernet Realtek, VMware host-only
       adaptörlerinin gateway'i yok)
+- [ ] **Akış boyutu değişince (`patches/0007`):** yansıtma sürerken Fotoğraflar'da bir foto/video
+      aç → görüntü küçülmüyor, telefon ekranı çerçeveyi dolduruyor; günlükte
+      `resolution: ...` satırı çıkıyor. Kapatınca yine dolu
 - [ ] Mirroring + **ses**: video/müzik oynatırken ses geliyor (#605 yolu, `4c86094`). `-d` ile
       kernel timestamp `(kernel)`/`(clock)` satırına bak
 - [ ] iPhone'dan mirroring'i durdur → pencere kapanıyor/sıfırlanıyor (TEARDOWN, #540, `546820c`).
