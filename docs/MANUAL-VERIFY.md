@@ -103,6 +103,9 @@ iPhone ister. Her maddede iOS sürümünü not et.
       yayınlanmıyor (`mdnsd.c:374-380` @`4e95a9e`, okuyarak çıkarım). Böyle bir makinede iPhone
       alıcıyı görüyor ve bağlanabiliyor mu? (Bu makinede yok: Ethernet Realtek, VMware host-only
       adaptörlerinin gateway'i yok)
+- [ ] **VPN adaptörü (`patches/0006`):** kendi Ethernet adaptörünü kuran split-tunnel bir VPN
+      bağlıyken `scripts/mdns-browse.py` alıcıyı LAN adresinde gösteriyor ve iPhone listede
+      görüp bağlanabiliyor (0006'sız build'de ilan VPN adresinde çıkıyordu, iPhone görmüyordu)
 - [ ] Mirroring + **ses**: video/müzik oynatırken ses geliyor (#605 yolu, `4c86094`). `-d` ile
       kernel timestamp `(kernel)`/`(clock)` satırına bak
 - [ ] iPhone'dan mirroring'i durdur → pencere kapanıyor/sıfırlanıyor (TEARDOWN, #540, `546820c`).
