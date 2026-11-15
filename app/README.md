@@ -179,6 +179,11 @@ turns the identifier into a screen aspect and a corner radius.
 - **The guest region** rounds the screen corners. Region calls work across the process
   boundary (measured, `docs/PHASE2-M2-SPEC.md`), but they are in window coordinates, so
   every resize re-applies the region.
+- **Smooth corners.** A region is one bit deep, so both regions alone give stepped corners on
+  Windows 10. The bezel is drawn a second time with per-pixel alpha
+  (`paintFrameEdge`) into a click-through layered window we own, lying exactly on ours; DWM
+  blends its outer outline against the desktop and its inner one against the picture. Both
+  regions are tucked 2 px under its opaque part so their steps never show.
 - **The same region crops** whatever pillarbox the phone baked into the stream: the guest is
   blown up past the window until the phone screen lands on the screen rectangle, and the
   bars fall outside the clip. A stream that already has the device's aspect is not cropped.
