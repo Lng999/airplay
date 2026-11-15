@@ -78,4 +78,14 @@ FrameGeometry layoutDeviceFrame(SIZE client, SIZE stream, const DeviceProfile& p
 // for this device and orientation. 0 when unknown.
 double frameAspect(const DeviceProfile& profile, bool landscape);
 
+// Signed distance from a point to the edge of a rounded rectangle, negative inside. Pass pixel
+// centres (x + 0.5); a pixel's coverage is then clamp(0.5 - d, 0, 1).
+double roundRectDistance(double x, double y, const RECT& r, double radius);
+
+// The bezel as premultiplied BGRA (top-down, w*h pixels): opaque between the body and the
+// screen outline, transparent elsewhere, both outlines anti-aliased, a lighter hairline along
+// the outer edge. `origin` is where client (0,0) of `g` lands in the bitmap.
+void paintFrameEdge(unsigned int* pixels, int w, int h, POINT origin, const FrameGeometry& g,
+                    COLORREF body, COLORREF hairline);
+
 } // namespace ui

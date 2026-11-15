@@ -186,4 +186,41 @@ FrameGeometry layoutDeviceFrame(SIZE client, SIZE stream, const DeviceProfile& p
     return g;
 }
 
+double roundRectDistance(double x, double y, const RECT& r, double radius) {
+    const double hx = (r.right - r.left) / 2.0, hy = (r.bottom - r.top) / 2.0;
+    radius = (std::max)(0.0, (std::min)({radius, hx, hy}));
+    const double px = std::fabs(x - (r.left + hx)) - (hx - radius);
+    const double py = std::fabs(y - (r.top + hy)) - (hy - radius);
+    const double outside = std::hypot((std::max)(px, 0.0), (std::max)(py, 0.0));
+    const double inside = (std::min)((std::max)(px, py), 0.0);
+    return outside + inside - radius;
+}
+
+void paintFrameEdge(unsigned int* pixels, int w, int h, POINT origin, const FrameGeometry& g,
+                    COLORREF body, COLORREF hairline) {
+    auto cover = [](double d) { return (std::min)(1.0, (std::max)(0.0, 0.5 - d)); };
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+            unsigned int& out = pixels[static_cast<size_t>(y) * w + x];
+            out = 0;
+            if (!g.valid) continue;
+            const double cx = x - origin.x + 0.5, cy = y - origin.y + 0.5;
+            const double dOuter = roundRectDistance(cx, cy, g.body, g.bodyRadius);
+            if (dOuter >= 0.5) continue;                       // outside the phone
+            const double dInner = roundRectDistance(cx, cy, g.screen, g.screenRadius);
+            if (dInner <= -0.5) continue;                      // on the picture
+            const double a = (std::min)(cover(dOuter), cover(-dInner));
+            if (a <= 0.0) continue;
+            // the hairline: roughly the outermost pixel of the body
+            const double line = (std::min)(1.0, (cover(dOuter) - cover(dOuter + 1.0)) / a);
+            auto mix = [&](int b, int e) { return b + (e - b) * line; };
+            const double r = mix(GetRValue(body), GetRValue(hairline));
+            const double gr = mix(GetGValue(body), GetGValue(hairline));
+            const double b = mix(GetBValue(body), GetBValue(hairline));
+            auto ch = [&](double c) { return static_cast<unsigned int>(c * a + 0.5); };
+            out = (ch(255.0) << 24) | (ch(r) << 16) | (ch(gr) << 8) | ch(b);
+        }
+    }
+}
+
 } // namespace ui
