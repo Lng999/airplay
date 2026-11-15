@@ -43,6 +43,10 @@ public:
     bool hasGuest()   const { return adopted_.valid(); }
     bool guestAlive() const { return adopted_.valid() && IsWindow(adopted_.hwnd); }
     SIZE sourceSize() const { return adopted_.source; }
+    // The client changed the stream format mid-session (HostEvent::Resolution). The sink
+    // letterboxes the new picture inside the window it already has, so without this the
+    // phone shrinks into the middle of the frame.
+    void setSourceSize(SIZE size);
     HWND hwnd()       const { return hwnd_; }
 
     // Who is mirroring, from HostEvent::clientModel ("iPhone14,5"). Decides whether a

@@ -47,7 +47,7 @@ enum class LineTag {
     VideoDisabled,    // uxplay.cpp:3080  "video_disabled"
     AudioDisabled,    // uxplay.cpp:3184  "audio_disabled"
     FullscreenHint,   // uxplay.cpp:3097/:3106 "Use Alt-Enter key combination to ..."
-    Resolution,       // lib/raop_rtp_mirror.c:608-609 (DEBUG level, needs -d)
+    Resolution,       // patches/0007 (INFO), and lib/raop_rtp_mirror.c:611 again with -d
     Warning,          // "*** WARNING: ..."
     Error             // "*** ERROR: ..."
 };

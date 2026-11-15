@@ -317,7 +317,7 @@ void testFullscreenHint() {
     CHECK_TAG(p, LineTag::FullscreenHint);
 }
 
-// row 16 — mirrored resolution, DEBUG level only (lib/raop_rtp_mirror.c:608-609); needs -d.
+// row 16 — mirrored resolution: patches/0007 at INFO, lib/raop_rtp_mirror.c:611 at DEBUG.
 void testResolution() {
     beginTest("resolution (debug)");
     const std::string raw =

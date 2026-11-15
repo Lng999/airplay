@@ -44,7 +44,7 @@ struct AppConfig {
     std::wstring audioSink    = L"autoaudiosink";
     bool         fullscreen   = false;
     bool         h265         = false;
-    bool         debug        = false;         // required for Resolution events (DESIGN 6.1)
+    bool         debug        = false;         // -d: the receiver's DEBUG output
     bool         noHold       = true;
     int          resetSeconds = 0;             // -reset n; 0 = no timeout at all.
                                                // A locked iPhone stops sending feedback,
