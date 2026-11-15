@@ -42,18 +42,22 @@ private:
 
     void createControls();
     void createFonts();
-    // Hands fontUi_/fontStatus_ to every control. createFonts() deletes the previous pair, so
+    // Hands the fonts to every control. createFonts() deletes the previous set, so
     // a control left out here would keep drawing with a deleted HFONT after a DPI change.
     void applyFonts();
     void layout();
-    void applySectionVisibility();
+    void applyPageVisibility();   // shows the controls of settingsPage_, hides the others
     void resizeToContent();
+    // Palette from Windows' app mode; brushes, the caption and the native controls follow.
+    void applyTheme();
+    void paintWindow(HDC dc, const RECT& client);
     // Update flow. Each step runs on a throwaway worker thread and posts its result back;
     // updateBusy_ is the only guard, so a second request while one is in flight is ignored.
     void startUpdateCheck(bool manual);
     void startUpdateDownload();
     void onUpdateChecked(struct UpdateResult* r);
     void onUpdateDownloaded(struct UpdateResult* r);
+    int  chromeWidth() const;
     int  chromeHeight() const;
     void controlsFromConfig();
     void configFromControls();
@@ -107,15 +111,22 @@ private:
     HWND chkAlwaysOnTop_ = nullptr, chkAutostart_ = nullptr;
     HWND chkEmbed_ = nullptr, chkLogon_ = nullptr, chkFrame_ = nullptr;
     HWND btnToggle_ = nullptr, btnCopy_ = nullptr;   // one button: Start <-> Stop
-    HWND secAdvanced_ = nullptr, secDetails_ = nullptr;   // collapsible section headers
+    HWND hdrReceiver_ = nullptr;                     // "AirPlay alıcısı" on the receiver card
+    HWND btnSettings_ = nullptr, btnBack_ = nullptr;   // main page <-> settings page
+    HWND hdrTitle_ = nullptr, hdrGeneral_ = nullptr, hdrConn_ = nullptr, hdrVideo_ = nullptr;
+    HWND hdrAudio_ = nullptr, hdrApp_ = nullptr, hdrLog_ = nullptr;
     HWND listLog_ = nullptr;
 
-    HFONT fontUi_ = nullptr, fontStatus_ = nullptr;
+    HFONT fontUi_ = nullptr;
+    HFONT fontHead_ = nullptr, fontTitle_ = nullptr, fontMono_ = nullptr;
+    HBRUSH brWindow_ = nullptr, brCard_ = nullptr;   // activePalette().window / .card
     int   dpi_ = 96;
 
-    // Collapsed by default: the plain window is status + name + one button.
-    bool showAdvanced_ = false, showDetails_ = false;
-    int  logTop_ = 0;   // y of the log area, set by layout(); drives resizeToContent()
+    // Main page: the status card, Start/Stop and three toggles. Settings page: everything else,
+    // the log included.
+    bool settingsPage_ = false;
+    int  contentH_ = 0;                  // client height the page needs; set by layout()
+    RECT statusCard_{}, toggleCard_{};   // main page surfaces, painted by paintWindow()
 
     airplay::UxplayHost host_;
     UiLog log_;
