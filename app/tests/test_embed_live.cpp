@@ -196,6 +196,25 @@ int wmain(int argc, wchar_t** argv) {
     check((g.right - g.left) > client.right, "the pillarbox is cropped, not letterboxed");
     check(rb.right - rb.left < (g.right - g.left), "the region is narrower than the guest");
 
+    // Framed means borderless and phone-shaped (macOS iPhone Mirroring), and the picture
+    // itself drags the window: the guest is disabled, so the hit-test falls through to us.
+    const LONG_PTR hostStyle = GetWindowLongPtrW(video.hwnd(), GWL_STYLE);
+    check((hostStyle & WS_POPUP) != 0 && (hostStyle & WS_CAPTION) != WS_CAPTION,
+          "the framed window has no caption or border");
+    HRGN hostRgn = CreateRectRgn(0, 0, 1, 1);
+    check(GetWindowRgn(video.hwnd(), hostRgn) != ERROR, "our window is shaped to the phone");
+    DeleteObject(hostRgn);
+    check((GetWindowLongPtrW(guest, GWL_STYLE) & WS_DISABLED) != 0, "the guest is disabled");
+    RECT wr{};
+    GetWindowRect(video.hwnd(), &wr);
+    const POINT mid{(wr.left + wr.right) / 2, (wr.top + wr.bottom) / 2};
+    check(WindowFromPoint(mid) == video.hwnd(), "a point on the picture belongs to us");
+    check(SendMessageW(video.hwnd(), WM_NCHITTEST, 0, MAKELPARAM(mid.x, mid.y)) == HTCAPTION,
+          "the picture is a caption: it drags the window");
+    check(SendMessageW(video.hwnd(), WM_NCHITTEST, 0, MAKELPARAM(wr.right - 2, mid.y)) ==
+              HTRIGHT,
+          "the right edge resizes");
+
     GetExitCodeProcess(pi.hProcess, &ec);
     check(ec == STILL_ACTIVE, "the receiver survived the region surgery too");
     pump(1500);
@@ -247,6 +266,8 @@ int wmain(int argc, wchar_t** argv) {
     pump(300);
     check(GetParent(guest) == nullptr, "released to the desktop: no parent");
     check(IsWindowVisible(guest) != 0, "released to the desktop: visible");
+    check((GetWindowLongPtrW(guest, GWL_STYLE) & WS_DISABLED) == 0,
+          "released to the desktop: enabled again");
 
     GetExitCodeProcess(pi.hProcess, &ec);
     check(ec == STILL_ACTIVE, "the receiver process is still alive at the end");

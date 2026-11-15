@@ -54,10 +54,13 @@ AdoptedWindow adoptWindow(HWND guest, HWND host) {
     const LONG_PTR style   = GetWindowLongPtrW(guest, GWL_STYLE);
     const LONG_PTR exStyle = GetWindowLongPtrW(guest, GWL_EXSTYLE);
 
+    // WS_DISABLED: mirroring takes no input back, and a disabled child is skipped by mouse
+    // hit-testing, so clicks and drags on the picture reach the host - which is what lets the
+    // borderless framed window be dragged by the picture. releaseWindow() restores `style`.
     const LONG_PTR childStyle =
         (style & ~static_cast<LONG_PTR>(WS_POPUP | WS_OVERLAPPED | WS_CAPTION | WS_THICKFRAME |
                                         WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU)) |
-        static_cast<LONG_PTR>(WS_CHILD | WS_CLIPSIBLINGS);
+        static_cast<LONG_PTR>(WS_CHILD | WS_CLIPSIBLINGS | WS_DISABLED);
     const LONG_PTR childEx =
         exStyle & ~static_cast<LONG_PTR>(WS_EX_APPWINDOW | WS_EX_WINDOWEDGE | WS_EX_TOPMOST |
                                          WS_EX_TOOLWINDOW | WS_EX_DLGMODALFRAME);

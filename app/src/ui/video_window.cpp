@@ -21,12 +21,11 @@ constexpr int kMinClient = 160;
 // The rotate entry, next to fullscreen in the window's own system menu.
 constexpr int kSysRotate = 0x1010;
 
-// The phone. Deliberately not black-on-black: the body has to read as an object sitting on
-// the backdrop, and the cut-out has to read as a hole in the picture.
+// The phone: a slim near-black bezel with a lighter hairline, as macOS iPhone Mirroring draws
+// it. The backdrop only shows in fullscreen; windowed, the window is shaped to the body.
 constexpr COLORREF kBackdrop = RGB(0x0a, 0x0a, 0x0c);
-constexpr COLORREF kBody     = RGB(0x1c, 0x1c, 0x20);
-constexpr COLORREF kBodyEdge = RGB(0x3c, 0x3c, 0x44);
-constexpr COLORREF kCutout   = RGB(0x00, 0x00, 0x00);
+constexpr COLORREF kBody     = RGB(0x05, 0x05, 0x06);
+constexpr COLORREF kBodyEdge = RGB(0x48, 0x48, 0x50);
 
 } // namespace
 
@@ -91,6 +90,7 @@ bool VideoWindow::adopt(HWND guest) {
     // jump to fullscreen on top of it: the blink on the first connection. The window goes
     // up once, finished.
     hidden_ = false;
+    updateChrome();
     sizeToSource();
     setAlwaysOnTop(cfg_.alwaysOnTop);
     if (cfg_.videoFullscreen || cfg_.fullscreen) setFullscreen(true);
@@ -151,6 +151,7 @@ void VideoWindow::setDevice(const std::wstring& model) {
     wantsFrame_ = deviceWantsFrame(model);
     landscapeHint_ = false;
     if (hwnd_) {
+        updateChrome();
         layoutGuest();
         InvalidateRect(hwnd_, nullptr, TRUE);
     }
@@ -161,8 +162,45 @@ void VideoWindow::setFrameEnabled(bool on) {
     cfg_.deviceFrame = on;
     if (!hwnd_) return;
     if (!on) clearGuestRegion();
+    updateChrome();
     layoutGuest();
     InvalidateRect(hwnd_, nullptr, TRUE);
+}
+
+// With a frame, the window is the phone and nothing else - no caption, no border, shaped to
+// the body (layoutFramed) - like macOS iPhone Mirroring. Without one, an ordinary window.
+// Fullscreen owns the style while it lasts; setFullscreen(false) calls back in here.
+void VideoWindow::updateChrome() {
+    if (!hwnd_ || fullscreen_) return;
+    const LONG_PTR style = GetWindowLongPtrW(hwnd_, GWL_STYLE);
+    const LONG_PTR want =
+        (style & static_cast<LONG_PTR>(WS_VISIBLE | WS_MINIMIZE)) |
+        static_cast<LONG_PTR>(WS_CLIPCHILDREN) |
+        static_cast<LONG_PTR>(frameActive() ? (WS_POPUP | WS_SYSMENU | WS_MINIMIZEBOX)
+                                            : WS_OVERLAPPEDWINDOW);
+    if (style == want) return;
+    SetWindowLongPtrW(hwnd_, GWL_STYLE, want);
+    shapeWindow(false);
+    SetWindowPos(hwnd_, nullptr, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    sizeToSource();   // the window's aspect changes with the frame
+}
+
+// Clip our own window to the phone body, so the corners around it are the desktop. In
+// window coordinates, which for the borderless style are the client coordinates of geom_.
+void VideoWindow::shapeWindow(bool on) {
+    if (on && geom_.valid) {
+        const RECT& b = geom_.body;
+        HRGN rgn = CreateRoundRectRgn(b.left, b.top, b.right + 1, b.bottom + 1,
+                                      geom_.bodyRadius * 2, geom_.bodyRadius * 2);
+        if (!rgn) return;
+        // The window takes ownership of the region.
+        if (SetWindowRgn(hwnd_, rgn, TRUE)) shaped_ = true;
+        else DeleteObject(rgn);
+    } else if (shaped_) {
+        SetWindowRgn(hwnd_, nullptr, TRUE);
+        shaped_ = false;
+    }
 }
 
 bool VideoWindow::frameActive() const {
@@ -254,6 +292,7 @@ void VideoWindow::layoutPlain() {
 
     geom_ = FrameGeometry{};
     clearGuestRegion();
+    shapeWindow(false);
 
     const int sw = adopted_.source.cx > 0 ? adopted_.source.cx : cw;
     const int sh = adopted_.source.cy > 0 ? adopted_.source.cy : ch;
@@ -280,14 +319,16 @@ void VideoWindow::layoutFramed() {
                  geom_.guest.right - geom_.guest.left, geom_.guest.bottom - geom_.guest.top,
                  SWP_NOZORDER | SWP_NOACTIVATE);
     applyGuestRegion();
+    shapeWindow(!fullscreen_);
     InvalidateRect(hwnd_, nullptr, TRUE);
 }
 
-// The region is what makes this more than a picture in a box: it clips the guest to the
-// screen rectangle (dropping any pillarbox the phone baked in), rounds the display corners
-// and punches the notch or the Dynamic Island out of the picture, so the body we paint
-// underneath shows through. Cross-process SetWindowRgn is allowed - measured, see
-// docs/PHASE2-M2-SPEC.md - but it is in window coordinates, so every resize re-applies it.
+// The region clips the guest to the screen rectangle (dropping any pillarbox the phone baked
+// in) and rounds the display corners. No notch or Dynamic Island is cut out: the stream
+// already carries whatever iOS draws there - an island that grows for a Live Activity
+// included - and a fixed hole on top of it showed two islands. Cross-process SetWindowRgn is
+// allowed - measured, see docs/PHASE2-M2-SPEC.md - but it is in window coordinates, so every
+// resize re-applies it.
 void VideoWindow::applyGuestRegion() {
     if (!guestAlive() || !geom_.valid) return;
 
@@ -295,28 +336,6 @@ void VideoWindow::applyGuestRegion() {
     HRGN rgn = CreateRoundRectRgn(clip.left, clip.top, clip.right + 1, clip.bottom + 1,
                                   geom_.screenRadius * 2, geom_.screenRadius * 2);
     if (!rgn) return;
-
-    const int cutW = geom_.cutout.right - geom_.cutout.left;
-    const int cutH = geom_.cutout.bottom - geom_.cutout.top;
-    if (cutW > 0 && cutH > 0) {
-        // client coordinates -> the guest's own
-        RECT c{geom_.cutout.left - geom_.guest.left, geom_.cutout.top - geom_.guest.top,
-               geom_.cutout.right - geom_.guest.left, geom_.cutout.bottom - geom_.guest.top};
-        // A notch is attached to the edge: only its far two corners are round, which is what
-        // pushing the near end outside the screen rect achieves.
-        if (geom_.cutoutAtEdge) {
-            if (geom_.landscape)
-                c.left -= geom_.cutoutRadius * 2;
-            else
-                c.top -= geom_.cutoutRadius * 2;
-        }
-        HRGN hole = CreateRoundRectRgn(c.left, c.top, c.right + 1, c.bottom + 1,
-                                       geom_.cutoutRadius * 2, geom_.cutoutRadius * 2);
-        if (hole) {
-            CombineRgn(rgn, rgn, hole, RGN_DIFF);
-            DeleteObject(hole);
-        }
-    }
     // The window takes ownership of the region; do not delete it here.
     if (!SetWindowRgn(adopted_.hwnd, rgn, TRUE)) DeleteObject(rgn);
 }
@@ -350,29 +369,6 @@ void VideoWindow::paintFrame(HDC dc, const RECT& client) {
     SelectObject(dc, oldP);
     DeleteObject(body);
     DeleteObject(edge);
-
-    // The hole in the picture is the darkest thing on screen, like the real one.
-    const int cutW = geom_.cutout.right - geom_.cutout.left;
-    const int cutH = geom_.cutout.bottom - geom_.cutout.top;
-    if (cutW > 0 && cutH > 0) {
-        RECT c = geom_.cutout;
-        if (geom_.cutoutAtEdge) {
-            if (geom_.landscape)
-                c.left -= geom_.cutoutRadius * 2;
-            else
-                c.top -= geom_.cutoutRadius * 2;
-        }
-        HBRUSH cut = CreateSolidBrush(kCutout);
-        HPEN   cutPen = CreatePen(PS_SOLID, 1, kCutout);
-        oldB = SelectObject(dc, cut);
-        oldP = SelectObject(dc, cutPen);
-        RoundRect(dc, c.left, c.top, c.right + 1, c.bottom + 1, geom_.cutoutRadius * 2,
-                  geom_.cutoutRadius * 2);
-        SelectObject(dc, oldB);
-        SelectObject(dc, oldP);
-        DeleteObject(cut);
-        DeleteObject(cutPen);
-    }
 }
 
 void VideoWindow::constrainSizing(WPARAM edge, RECT* r) const {
@@ -452,6 +448,7 @@ void VideoWindow::setFullscreen(bool on) {
     }
     fullscreen_ = on;
     cfg_.videoFullscreen = on;
+    if (!on) updateChrome();   // the frame may have been switched while fullscreen
     layoutGuest();
 }
 
@@ -514,6 +511,31 @@ LRESULT VideoWindow::wndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_LBUTTONDBLCLK:
             setFullscreen(!fullscreen_);
             return 0;
+
+        // Borderless framed window: a band along the edge resizes, everything else is a
+        // caption - drag to move, right-click for the system menu (DefWindowProc), double-click
+        // for fullscreen. The guest is disabled (video_embed.cpp), so this sees the picture too.
+        case WM_NCHITTEST:
+            if (frameActive() && !fullscreen_) {
+                POINT pt{static_cast<short>(LOWORD(lp)), static_cast<short>(HIWORD(lp))};
+                ScreenToClient(hwnd, &pt);
+                RECT rc{};
+                GetClientRect(hwnd, &rc);
+                const int band = GetSystemMetrics(SM_CXSIZEFRAME) +
+                                 GetSystemMetrics(SM_CXPADDEDBORDER);
+                const bool l = pt.x < band, r = pt.x >= rc.right - band;
+                const bool t = pt.y < band, b = pt.y >= rc.bottom - band;
+                if (t) return l ? HTTOPLEFT : r ? HTTOPRIGHT : HTTOP;
+                if (b) return l ? HTBOTTOMLEFT : r ? HTBOTTOMRIGHT : HTBOTTOM;
+                if (l) return HTLEFT;
+                if (r) return HTRIGHT;
+                return HTCAPTION;
+            }
+            break;
+
+        case WM_NCLBUTTONDBLCLK:
+            if (wp == HTCAPTION) { setFullscreen(!fullscreen_); return 0; }
+            break;
 
         case WM_SYSCOMMAND:
             if ((wp & 0xFFF0) == kSysFullscreen) { setFullscreen(!fullscreen_); return 0; }
