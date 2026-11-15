@@ -27,6 +27,11 @@ constexpr COLORREF kBackdrop = RGB(0x0a, 0x0a, 0x0c);
 constexpr COLORREF kBody     = RGB(0x05, 0x05, 0x06);
 constexpr COLORREF kBodyEdge = RGB(0x48, 0x48, 0x50);
 
+// The anti-aliased bezel overlay (updateEdge). The window and guest regions are tucked this
+// many pixels under its opaque part, so their stepped edges never show.
+const wchar_t* const kEdgeClass = L"AirplayVideoEdge";
+constexpr int kEdgeTuck = 2;
+
 } // namespace
 
 VideoWindow::VideoWindow(HINSTANCE hinst, AppConfig& cfg) : hinst_(hinst), cfg_(cfg) {}
@@ -190,9 +195,12 @@ void VideoWindow::updateChrome() {
 // window coordinates, which for the borderless style are the client coordinates of geom_.
 void VideoWindow::shapeWindow(bool on) {
     if (on && geom_.valid) {
+        // Inset by kEdgeTuck: the region's stepped edge then lies under the overlay's opaque
+        // bezel, and the overlay alone draws the smooth outline (updateEdge).
         const RECT& b = geom_.body;
-        HRGN rgn = CreateRoundRectRgn(b.left, b.top, b.right + 1, b.bottom + 1,
-                                      geom_.bodyRadius * 2, geom_.bodyRadius * 2);
+        const int t = kEdgeTuck;
+        HRGN rgn = CreateRoundRectRgn(b.left + t, b.top + t, b.right + 1 - t, b.bottom + 1 - t,
+                                      (geom_.bodyRadius - t) * 2, (geom_.bodyRadius - t) * 2);
         if (!rgn) return;
         // The window takes ownership of the region.
         if (SetWindowRgn(hwnd_, rgn, TRUE)) shaped_ = true;
@@ -201,6 +209,77 @@ void VideoWindow::shapeWindow(bool on) {
         SetWindowRgn(hwnd_, nullptr, TRUE);
         shaped_ = false;
     }
+}
+
+// Window regions are one bit deep - a pixel is in or out - so on Windows 10 the rounded window
+// and screen corners come out stepped. The bezel is therefore drawn again, with per-pixel
+// alpha, in a click-through layered window that we own and that lies exactly on top of us:
+// DWM blends its outer outline against the desktop and its inner outline against the picture.
+void VideoWindow::updateEdge() {
+    if (!hwnd_ || !frameActive() || !geom_.valid || !IsWindowVisible(hwnd_) || IsIconic(hwnd_)) {
+        hideEdge();
+        return;
+    }
+    if (!edge_) {
+        WNDCLASSEXW wc{};
+        wc.cbSize = sizeof(wc);
+        wc.lpfnWndProc = DefWindowProcW;
+        wc.hInstance = hinst_;
+        wc.lpszClassName = kEdgeClass;
+        if (!RegisterClassExW(&wc) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) return;
+        // Owned by us: always just above us, minimised and destroyed with us.
+        edge_ = CreateWindowExW(WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE |
+                                    WS_EX_TOOLWINDOW,
+                                kEdgeClass, L"", WS_POPUP, 0, 0, 0, 0, hwnd_, nullptr, hinst_,
+                                nullptr);
+        if (!edge_) return;
+    }
+
+    RECT wr{};
+    GetWindowRect(hwnd_, &wr);
+    const int w = wr.right - wr.left, h = wr.bottom - wr.top;
+    if (w <= 0 || h <= 0) return;
+    POINT origin{0, 0};   // client (0,0) inside the window rect; 0,0 for the borderless style
+    ClientToScreen(hwnd_, &origin);
+    origin.x -= wr.left;
+    origin.y -= wr.top;
+
+    BITMAPINFO bi{};
+    bi.bmiHeader.biSize = sizeof(bi.bmiHeader);
+    bi.bmiHeader.biWidth = w;
+    bi.bmiHeader.biHeight = -h;   // top-down
+    bi.bmiHeader.biPlanes = 1;
+    bi.bmiHeader.biBitCount = 32;
+    bi.bmiHeader.biCompression = BI_RGB;
+    HDC screen = GetDC(nullptr);
+    HDC mem = CreateCompatibleDC(screen);
+    void* bits = nullptr;
+    HBITMAP dib = CreateDIBSection(mem, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (dib && bits) {
+        paintFrameEdge(static_cast<unsigned int*>(bits), w, h, origin, geom_, kBody, kBodyEdge);
+        HGDIOBJ old = SelectObject(mem, dib);
+        POINT dst{wr.left, wr.top}, src{0, 0};
+        SIZE size{w, h};
+        BLENDFUNCTION blend{AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+        UpdateLayeredWindow(edge_, screen, &dst, &size, mem, &src, 0, &blend, ULW_ALPHA);
+        SelectObject(mem, old);
+    }
+    if (dib) DeleteObject(dib);
+    DeleteDC(mem);
+    ReleaseDC(nullptr, screen);
+    if (!IsWindowVisible(edge_)) ShowWindow(edge_, SW_SHOWNOACTIVATE);
+}
+
+void VideoWindow::placeEdge() {
+    if (!edge_ || !IsWindowVisible(edge_)) return;
+    RECT wr{};
+    GetWindowRect(hwnd_, &wr);
+    SetWindowPos(edge_, nullptr, wr.left, wr.top, 0, 0,
+                 SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
+void VideoWindow::hideEdge() {
+    if (edge_ && IsWindowVisible(edge_)) ShowWindow(edge_, SW_HIDE);
 }
 
 bool VideoWindow::frameActive() const {
@@ -293,6 +372,7 @@ void VideoWindow::layoutPlain() {
     geom_ = FrameGeometry{};
     clearGuestRegion();
     shapeWindow(false);
+    hideEdge();
 
     const int sw = adopted_.source.cx > 0 ? adopted_.source.cx : cw;
     const int sh = adopted_.source.cy > 0 ? adopted_.source.cy : ch;
@@ -320,6 +400,7 @@ void VideoWindow::layoutFramed() {
                  SWP_NOZORDER | SWP_NOACTIVATE);
     applyGuestRegion();
     shapeWindow(!fullscreen_);
+    updateEdge();
     InvalidateRect(hwnd_, nullptr, TRUE);
 }
 
@@ -332,9 +413,13 @@ void VideoWindow::layoutFramed() {
 void VideoWindow::applyGuestRegion() {
     if (!guestAlive() || !geom_.valid) return;
 
+    // Grown by kEdgeTuck so there is picture under the whole of the overlay's soft inner
+    // outline; the stepped edge of this region hides under its opaque bezel.
     const RECT& clip = geom_.guestClip;
-    HRGN rgn = CreateRoundRectRgn(clip.left, clip.top, clip.right + 1, clip.bottom + 1,
-                                  geom_.screenRadius * 2, geom_.screenRadius * 2);
+    const int t = kEdgeTuck;
+    HRGN rgn = CreateRoundRectRgn(clip.left - t, clip.top - t, clip.right + 1 + t,
+                                  clip.bottom + 1 + t, (geom_.screenRadius + t) * 2,
+                                  (geom_.screenRadius + t) * 2);
     if (!rgn) return;
     // The window takes ownership of the region; do not delete it here.
     if (!SetWindowRgn(adopted_.hwnd, rgn, TRUE)) DeleteObject(rgn);
@@ -572,7 +657,23 @@ LRESULT VideoWindow::wndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (onClosed_) onClosed_();
             return 0;
 
+        // The overlay follows us: hidden with us, redrawn when we come back (layout ran while
+        // we were still hidden, so it had nothing to draw on), moved when we move. A resize
+        // reaches it through WM_SIZE -> layoutFramed, which DefWindowProc sends from here.
+        case WM_WINDOWPOSCHANGED: {
+            const LRESULT r = DefWindowProcW(hwnd, msg, wp, lp);
+            const auto* pos = reinterpret_cast<const WINDOWPOS*>(lp);
+            if (pos->flags & SWP_HIDEWINDOW)
+                hideEdge();
+            else if ((pos->flags & SWP_SHOWWINDOW) || !edge_ || !IsWindowVisible(edge_))
+                updateEdge();
+            else if (!(pos->flags & SWP_NOMOVE))
+                placeEdge();
+            return r;
+        }
+
         case WM_DESTROY:
+            edge_ = nullptr;   // owned: Windows destroys it with us
             hwnd_ = nullptr;
             return 0;
 

@@ -208,12 +208,35 @@ int wmain(int argc, wchar_t** argv) {
     RECT wr{};
     GetWindowRect(video.hwnd(), &wr);
     const POINT mid{(wr.left + wr.right) / 2, (wr.top + wr.bottom) / 2};
-    check(WindowFromPoint(mid) == video.hwnd(), "a point on the picture belongs to us");
+    // Only meaningful when no other top-level window (another topmost app) covers the point.
+    HWND at = WindowFromPoint(mid);
+    if (GetAncestor(at, GA_ROOT) == video.hwnd() || GetAncestor(at, GA_ROOT) == guest)
+        check(at == video.hwnd(), "a point on the picture belongs to us, not the guest");
+    else
+        std::printf("%-52s SKIP (another window covers it)\n", "a point on the picture belongs to us");
     check(SendMessageW(video.hwnd(), WM_NCHITTEST, 0, MAKELPARAM(mid.x, mid.y)) == HTCAPTION,
           "the picture is a caption: it drags the window");
     check(SendMessageW(video.hwnd(), WM_NCHITTEST, 0, MAKELPARAM(wr.right - 2, mid.y)) ==
               HTRIGHT,
           "the right edge resizes");
+
+    // The smooth outline: a layered, click-through overlay owned by us, exactly on top of us,
+    // following us when we move.
+    HWND edge = FindWindowExW(nullptr, nullptr, L"AirplayVideoEdge", nullptr);
+    check(edge && GetWindow(edge, GW_OWNER) == video.hwnd() && IsWindowVisible(edge),
+          "the anti-aliased edge overlay is up, owned by us");
+    const LONG_PTR edgeEx = edge ? GetWindowLongPtrW(edge, GWL_EXSTYLE) : 0;
+    check((edgeEx & (WS_EX_LAYERED | WS_EX_TRANSPARENT)) == (WS_EX_LAYERED | WS_EX_TRANSPARENT),
+          "the overlay is layered and click-through");
+    RECT er{};
+    GetWindowRect(edge, &er);
+    check(EqualRect(&er, &wr) != 0, "the overlay lies exactly on our window");
+    SetWindowPos(video.hwnd(), nullptr, wr.left + 40, wr.top + 20, 0, 0,
+                 SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    pump(200);
+    GetWindowRect(video.hwnd(), &wr);
+    GetWindowRect(edge, &er);
+    check(EqualRect(&er, &wr) != 0, "the overlay follows a move");
 
     GetExitCodeProcess(pi.hProcess, &ec);
     check(ec == STILL_ACTIVE, "the receiver survived the region surgery too");
@@ -235,6 +258,7 @@ int wmain(int argc, wchar_t** argv) {
     check(video.hasGuest(), "the guest is still ours after the close");
     check(IsWindowVisible(video.hwnd()) == 0, "our window is hidden");
     check(IsWindowVisible(guest) == 0, "the guest did not reappear on the desktop");
+    check(IsWindowVisible(edge) == 0, "the edge overlay is hidden with us");
     check(GetParent(guest) == video.hwnd(), "the guest is still a child of ours");
 
     GetExitCodeProcess(pi.hProcess, &ec);
@@ -245,6 +269,7 @@ int wmain(int argc, wchar_t** argv) {
     check(!video.isHidden(), "showPicture clears the hidden state");
     check(IsWindowVisible(video.hwnd()) != 0, "our window is back on screen");
     check(IsWindowVisible(guest) != 0, "the guest is visible again");
+    check(IsWindowVisible(edge) != 0, "the edge overlay is back with us");
 
     // 4. hand it back quietly - what Stop, Exit and shutdown do. The guest still has to
     // leave our window (Windows destroys children with their parent, and the sink does not

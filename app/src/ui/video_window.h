@@ -78,6 +78,9 @@ private:
     void clearGuestRegion();
     void updateChrome();         // borderless while framed, an ordinary window otherwise
     void shapeWindow(bool on);   // clip our own window to the phone body
+    void updateEdge();           // (re)draw the anti-aliased bezel overlay, framed only
+    void placeEdge();            // keep the overlay on top of us after a move
+    void hideEdge();
     void paintFrame(HDC dc, const RECT& client);
     double effectiveAspect() const;   // what the window should keep while resizing
     void sizeToSource();
@@ -99,6 +102,7 @@ private:
     bool           landscapeHint_ = false; // user's answer when the stream is ambiguous
     FrameGeometry  geom_{};                // last computed layout, for WM_PAINT
     bool           shaped_ = false;        // our window currently has a region
+    HWND           edge_ = nullptr;        // layered overlay owned by us; see updateEdge()
     bool          fullscreen_ = false;
     WINDOWPLACEMENT prevPlacement_{};   // saved across a fullscreen switch
     LONG_PTR        prevStyle_ = 0;
