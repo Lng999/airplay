@@ -9,58 +9,48 @@
 namespace ui {
 namespace {
 
-// Cut-out proportions, as fractions of the screen rect.
-//   notch, 12 family : 209pt of a 390pt screen, 30pt of 844pt
-//   notch, 13 and up : 162pt of 390pt - Apple narrowed it by about a fifth
-//   island           : 125pt of 393pt, 37pt of 852pt
-constexpr double kNotchWideW = 0.53, kNotchWideH = 0.036;
-constexpr double kNotchW     = 0.42, kNotchH     = 0.038;
-constexpr double kIslandW    = 0.32, kIslandH    = 0.043;
-
-// The pill sits a little below the top edge; the notch hangs off it.
-constexpr double kIslandTop = 0.013;
-
-// Bezel and corner radii, as fractions of the screen's short side.
-constexpr double kBezel        = 0.030;
+// Bezel and corner radii, as fractions of the screen's short side. The bezel is the slim
+// macOS iPhone Mirroring one, not a full phone body.
+constexpr double kBezel        = 0.018;
 constexpr double kRoundCorner  = 0.115;   // notched/island phones: very round
 constexpr double kSquareCorner = 0.020;   // everything else
 
 const DeviceProfile kDevices[] = {
     // --- notch, 12 family (the wide one) ---
-    {L"iPhone13,1", L"iPhone 12 mini",    1080, 2340, Cutout::Notch,  kNotchWideW, kNotchWideH},
-    {L"iPhone13,2", L"iPhone 12",         1170, 2532, Cutout::Notch,  kNotchWideW, kNotchWideH},
-    {L"iPhone13,3", L"iPhone 12 Pro",     1170, 2532, Cutout::Notch,  kNotchWideW, kNotchWideH},
-    {L"iPhone13,4", L"iPhone 12 Pro Max", 1284, 2778, Cutout::Notch,  kNotchWideW, kNotchWideH},
+    {L"iPhone13,1", L"iPhone 12 mini",    1080, 2340, Cutout::Notch},
+    {L"iPhone13,2", L"iPhone 12",         1170, 2532, Cutout::Notch},
+    {L"iPhone13,3", L"iPhone 12 Pro",     1170, 2532, Cutout::Notch},
+    {L"iPhone13,4", L"iPhone 12 Pro Max", 1284, 2778, Cutout::Notch},
     // --- notch, 13/14 family (narrower) ---
-    {L"iPhone14,4", L"iPhone 13 mini",    1080, 2340, Cutout::Notch,  kNotchW, kNotchH},
-    {L"iPhone14,5", L"iPhone 13",         1170, 2532, Cutout::Notch,  kNotchW, kNotchH},
-    {L"iPhone14,2", L"iPhone 13 Pro",     1170, 2532, Cutout::Notch,  kNotchW, kNotchH},
-    {L"iPhone14,3", L"iPhone 13 Pro Max", 1284, 2778, Cutout::Notch,  kNotchW, kNotchH},
-    {L"iPhone14,7", L"iPhone 14",         1170, 2532, Cutout::Notch,  kNotchW, kNotchH},
-    {L"iPhone14,8", L"iPhone 14 Plus",    1284, 2778, Cutout::Notch,  kNotchW, kNotchH},
-    {L"iPhone17,5", L"iPhone 16e",        1170, 2532, Cutout::Notch,  kNotchW, kNotchH},
+    {L"iPhone14,4", L"iPhone 13 mini",    1080, 2340, Cutout::Notch},
+    {L"iPhone14,5", L"iPhone 13",         1170, 2532, Cutout::Notch},
+    {L"iPhone14,2", L"iPhone 13 Pro",     1170, 2532, Cutout::Notch},
+    {L"iPhone14,3", L"iPhone 13 Pro Max", 1284, 2778, Cutout::Notch},
+    {L"iPhone14,7", L"iPhone 14",         1170, 2532, Cutout::Notch},
+    {L"iPhone14,8", L"iPhone 14 Plus",    1284, 2778, Cutout::Notch},
+    {L"iPhone17,5", L"iPhone 16e",        1170, 2532, Cutout::Notch},
     // --- Dynamic Island ---
-    {L"iPhone15,2", L"iPhone 14 Pro",     1179, 2556, Cutout::Island, kIslandW, kIslandH},
-    {L"iPhone15,3", L"iPhone 14 Pro Max", 1290, 2796, Cutout::Island, kIslandW, kIslandH},
-    {L"iPhone15,4", L"iPhone 15",         1179, 2556, Cutout::Island, kIslandW, kIslandH},
-    {L"iPhone15,5", L"iPhone 15 Plus",    1290, 2796, Cutout::Island, kIslandW, kIslandH},
-    {L"iPhone16,1", L"iPhone 15 Pro",     1179, 2556, Cutout::Island, kIslandW, kIslandH},
-    {L"iPhone16,2", L"iPhone 15 Pro Max", 1290, 2796, Cutout::Island, kIslandW, kIslandH},
-    {L"iPhone17,1", L"iPhone 16 Pro",     1206, 2622, Cutout::Island, kIslandW, kIslandH},
-    {L"iPhone17,2", L"iPhone 16 Pro Max", 1320, 2868, Cutout::Island, kIslandW, kIslandH},
-    {L"iPhone17,3", L"iPhone 16",         1179, 2556, Cutout::Island, kIslandW, kIslandH},
-    {L"iPhone17,4", L"iPhone 16 Plus",    1290, 2796, Cutout::Island, kIslandW, kIslandH},
+    {L"iPhone15,2", L"iPhone 14 Pro",     1179, 2556, Cutout::Island},
+    {L"iPhone15,3", L"iPhone 14 Pro Max", 1290, 2796, Cutout::Island},
+    {L"iPhone15,4", L"iPhone 15",         1179, 2556, Cutout::Island},
+    {L"iPhone15,5", L"iPhone 15 Plus",    1290, 2796, Cutout::Island},
+    {L"iPhone16,1", L"iPhone 15 Pro",     1179, 2556, Cutout::Island},
+    {L"iPhone16,2", L"iPhone 15 Pro Max", 1290, 2796, Cutout::Island},
+    {L"iPhone17,1", L"iPhone 16 Pro",     1206, 2622, Cutout::Island},
+    {L"iPhone17,2", L"iPhone 16 Pro Max", 1320, 2868, Cutout::Island},
+    {L"iPhone17,3", L"iPhone 16",         1179, 2556, Cutout::Island},
+    {L"iPhone17,4", L"iPhone 16 Plus",    1290, 2796, Cutout::Island},
     // --- home button era, and the SE that kept it ---
-    {L"iPhone12,8", L"iPhone SE (2. nesil)", 750, 1334, Cutout::None, 0.0, 0.0},
-    {L"iPhone14,6", L"iPhone SE (3. nesil)", 750, 1334, Cutout::None, 0.0, 0.0},
+    {L"iPhone12,8", L"iPhone SE (2. nesil)", 750, 1334, Cutout::None},
+    {L"iPhone14,6", L"iPhone SE (3. nesil)", 750, 1334, Cutout::None},
 };
 
 // Family fallbacks. Apple has never gone back from a cut-out, so "newer than the island
 // generation" means island; the notch generations are 10 (iPhone X) through 14.
-const DeviceProfile kIslandGeneric{L"", L"", 1179, 2556, Cutout::Island, kIslandW, kIslandH};
-const DeviceProfile kNotchGeneric {L"", L"", 1170, 2532, Cutout::Notch,  kNotchW,  kNotchH};
-const DeviceProfile kPlainPhone   {L"", L"",  750, 1334, Cutout::None,   0.0,      0.0};
-const DeviceProfile kTablet       {L"", L"", 1640, 2360, Cutout::None,   0.0,      0.0};
+const DeviceProfile kIslandGeneric{L"", L"", 1179, 2556, Cutout::Island};
+const DeviceProfile kNotchGeneric {L"", L"", 1170, 2532, Cutout::Notch};
+const DeviceProfile kPlainPhone   {L"", L"",  750, 1334, Cutout::None};
+const DeviceProfile kTablet       {L"", L"", 1640, 2360, Cutout::None};
 
 bool startsWith(const std::wstring& s, const wchar_t* p) {
     const size_t n = wcslen(p);
@@ -168,28 +158,6 @@ FrameGeometry layoutDeviceFrame(SIZE client, SIZE stream, const DeviceProfile& p
     const double cornerFrac = profile.cutout == Cutout::None ? kSquareCorner : kRoundCorner;
     g.screenRadius = iround(cornerFrac * shortPix);
     g.bodyRadius = g.screenRadius + inset;
-
-    // --- the cut-out ----------------------------------------------------------------------
-    if (profile.cutout != Cutout::None) {
-        // The fractions are written for the portrait screen; rotate them with the phone.
-        const int cw = iround(profile.cutoutW * (g.landscape ? screenPixH : screenPixW));
-        const int ch = iround(profile.cutoutH * (g.landscape ? screenPixW : screenPixH));
-        g.cutoutAtEdge = profile.cutout == Cutout::Notch;
-        if (!g.landscape) {
-            const int x = g.screen.left + (screenPixW - cw) / 2;
-            const int top = g.cutoutAtEdge ? g.screen.top
-                                           : g.screen.top + iround(kIslandTop * screenPixH);
-            g.cutout = RECT{x, top, x + cw, top + ch};
-            g.cutoutRadius = g.cutoutAtEdge ? iround(ch * 0.55) : ch / 2;
-        } else {
-            // Rotated a quarter turn: the cut-out lives on the left edge and stands upright.
-            const int y = g.screen.top + (screenPixH - cw) / 2;
-            const int left = g.cutoutAtEdge ? g.screen.left
-                                            : g.screen.left + iround(kIslandTop * screenPixW);
-            g.cutout = RECT{left, y, left + ch, y + cw};
-            g.cutoutRadius = g.cutoutAtEdge ? iround(ch * 0.55) : ch / 2;
-        }
-    }
 
     // --- where the guest window goes --------------------------------------------------------
     if (!g.cropped) {
