@@ -1,0 +1,43 @@
+diff --git a/lib/mdnsd/mdnsd.c b/lib/mdnsd/mdnsd.c
+index 97a1ba6..758ea6d 100644
+--- a/lib/mdnsd/mdnsd.c
++++ b/lib/mdnsd/mdnsd.c
+@@ -369,6 +369,15 @@ static uint32_t mdns_get_default_ipv4(void)
+     
+     if (dwRetVal == NO_ERROR) {
+         PIP_ADAPTER_ADDRESSES pCurr = pAddresses;
++        /* Prefer the adapter the default route leaves through (a route lookup, nothing is
++         * sent). Enumeration order alone let a VPN adapter listed first, whose description
++         * passes the filters below, take the A record and the multicast interface, so the
++         * receiver was announced only on the VPN. */
++        DWORD best_if = 0;
++        uint32_t first = 0;
++        if (GetBestInterface(htonl(0x08080808), &best_if) != NO_ERROR) {
++            best_if = 0;
++        }
+         while (pCurr) {
+             // Precise target filters to bypass the Hyper-V virtual adapter loopback capture
+             if (pCurr->OperStatus == IfOperStatusUp && 
+@@ -381,12 +390,20 @@ static uint32_t mdns_get_default_ipv4(void)
+                 
+                 if (pCurr->FirstUnicastAddress != NULL) {
+                     struct sockaddr_in *sockaddr_ipv4 = (struct sockaddr_in *)pCurr->FirstUnicastAddress->Address.lpSockaddr;
+-                    addr = sockaddr_ipv4->sin_addr.s_addr;
+-                    break; 
++                    if (!first) {
++                        first = sockaddr_ipv4->sin_addr.s_addr;
++                    }
++                    if (pCurr->IfIndex == best_if) {
++                        addr = sockaddr_ipv4->sin_addr.s_addr;
++                        break;
++                    }
+                 }
+             }
+             pCurr = pCurr->Next;
+         }
++        if (!addr) {
++            addr = first;   /* no route lookup, or the route's adapter was filtered out */
++        }
+     }
+     free(pAddresses);
+ #else    
