@@ -161,25 +161,38 @@ survives all of it.
 
 ### The device frame
 
-`[app] device_frame=1` (the default, needs `embed_video`) draws the connected phone around
-the picture. The client says what it is: the SETUP plist's `model` key
+`[app] device_frame=1` (the default, needs `embed_video`) shows the picture the way macOS
+iPhone Mirroring does: a borderless, phone-shaped window with a slim bezel and the phone's
+own rounded corners. The client says what it is: the SETUP plist's `model` key
 (`third_party/UxPlay/lib/raop_handlers.h:749`) reaches us as `HostEvent::clientModel`, and
 in this project's own logs that reads `iPhone14,5` - an iPhone 13. `src/ui/device_frames.*`
-turns the identifier into a screen aspect, a corner radius and the right top cut-out, which
-is the whole point: a 13 has a notch where a 15 has a Dynamic Island.
+turns the identifier into a screen aspect and a corner radius.
 
-- **The body is ours to paint**; the notch or island is *cut out of the guest* with
-  `SetWindowRgn`, so what shows through the hole is the body underneath. Region calls work
-  across the process boundary (measured, `docs/PHASE2-M2-SPEC.md`), but they are in window
-  coordinates, so every resize re-applies the region.
+- **No notch or Dynamic Island is drawn.** The stream already carries whatever iOS shows
+  there - an island that grows for a Live Activity included - and a fixed cut-out on top of
+  it showed two islands.
+- **The window is the phone.** No caption and no border; our window is clipped to the body
+  with `SetWindowRgn`. The picture drags it (the adopted guest is `WS_DISABLED`, so mouse
+  hit-testing falls through to us), a band along the edge resizes it, double-click goes
+  fullscreen and right-click opens the system menu (close, minimise, fullscreen, rotate).
+  Without a frame - frame off, or a Mac mirroring its desktop - it is an ordinary window.
+- **The guest region** rounds the screen corners. Region calls work across the process
+  boundary (measured, `docs/PHASE2-M2-SPEC.md`), but they are in window coordinates, so
+  every resize re-applies the region.
+- **Smooth corners.** A region is one bit deep, so both regions alone give stepped corners on
+  Windows 10. The bezel is drawn a second time with per-pixel alpha
+  (`paintFrameEdge`) into a click-through layered window we own, lying exactly on ours; DWM
+  blends its outer outline against the desktop and its inner one against the picture. Both
+  regions are tucked 2 px under its opaque part so their steps never show.
 - **The same region crops** whatever pillarbox the phone baked into the stream: the guest is
   blown up past the window until the phone screen lands on the screen rectangle, and the
   bars fall outside the clip. A stream that already has the device's aspect is not cropped.
 - **Orientation** is read from the stream when it matches one of the device's two aspects.
   When the stream carries bars it cannot be read at all - bars look the same whichever way
   the phone is held - so portrait is assumed and **R** (or the system menu) flips it.
-- **An unknown model is not invented.** `iPhoneNN,M` with NN >= 15 gets an island, 10-14 a
-  notch, below that no cut-out, and the status line keeps showing the raw identifier. A
+- **An unknown model is not invented.** `iPhoneNN,M` with NN >= 10 gets the round corners
+  of the notch/island generations, older ones squarer ones, and the status line keeps
+  showing the raw identifier. A
   client that is not an iPhone or iPad - a Mac mirroring its desktop - gets no frame.
 
 `app/tests/test_device_frames.cpp` covers the table and the geometry in ctest;
@@ -283,7 +296,7 @@ auto_update=1       ; check GitHub for a newer release ~4 s after the window is 
                     ; 0 only disables the startup check; the tray menu item still works.
 embed_video=1       ; show the picture in our own window (see "The picture window").
                     ; 0 = milestone-1 behaviour: uxplay.exe keeps its own top-level window.
-device_frame=1      ; draw the connected phone around it, notch and all. Needs embed_video.
+device_frame=1      ; phone-shaped borderless window (macOS iPhone Mirroring style). Needs embed_video.
 msys_root=          ; empty = detect. Written back only when a human put a path here:
 uxplay_path=        ; a portable install answers both from its own folder (see below).
 

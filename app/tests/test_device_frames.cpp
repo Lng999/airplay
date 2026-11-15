@@ -59,11 +59,6 @@ void testLookupExact() {
     const ui::DeviceProfile q = ui::lookupDevice(L"iPhone15,4");
     CHECK(std::wstring(q.name) == L"iPhone 15");
     CHECK(q.cutout == ui::Cutout::Island);
-
-    // The 12 family's notch really is wider - the whole reason the frame is per-model.
-    CHECK(ui::lookupDevice(L"iPhone13,2").cutoutW > ui::lookupDevice(L"iPhone14,5").cutoutW);
-    // and the island is smaller than either notch.
-    CHECK(ui::lookupDevice(L"iPhone15,4").cutoutW < ui::lookupDevice(L"iPhone14,5").cutoutW);
 }
 
 void testLookupFallback() {
@@ -106,29 +101,19 @@ void testNativePortrait() {
     CHECK(g.body.left >= 0 && g.body.top >= 0 && g.body.right <= 600 && g.body.bottom <= 1000);
 }
 
-void testNotchGeometry() {
-    beginTest("notch and island placement");
-    const ui::DeviceProfile notch = ui::lookupDevice(L"iPhone14,5");
-    ui::FrameGeometry g = ui::layoutDeviceFrame(SIZE{600, 1000}, SIZE{1170, 2532}, notch, false);
-    CHECK(g.cutoutAtEdge);                       // hangs off the top edge
-    CHECK_INT(g.cutout.top, g.screen.top);
-    CHECK(contains(g.screen, g.cutout));
-    CHECK(width(g.cutout) < width(g.screen) / 2 + 10);
-    // centred
-    CHECK(approx((g.cutout.left - g.screen.left) - (g.screen.right - g.cutout.right), 0.0, 2.0));
-
-    const ui::DeviceProfile island = ui::lookupDevice(L"iPhone15,4");
-    ui::FrameGeometry h = ui::layoutDeviceFrame(SIZE{600, 1000}, SIZE{1179, 2556}, island, false);
-    CHECK(!h.cutoutAtEdge);                      // floats
-    CHECK(h.cutout.top > h.screen.top);
-    CHECK(contains(h.screen, h.cutout));
-    CHECK_INT(h.cutoutRadius, height(h.cutout) / 2);   // a pill
-
-    // A device with no cut-out gets none, and squarer corners.
+void testCorners() {
+    beginTest("corners and bezel");
+    ui::FrameGeometry g = ui::layoutDeviceFrame(SIZE{600, 1000}, SIZE{1170, 2532},
+                                                ui::lookupDevice(L"iPhone14,5"), false);
+    // A home-button phone has squarer corners than a notch/island one.
     ui::FrameGeometry s = ui::layoutDeviceFrame(SIZE{600, 1000}, SIZE{750, 1334},
                                                 ui::lookupDevice(L"iPhone14,6"), false);
-    CHECK(width(s.cutout) == 0 && height(s.cutout) == 0);
     CHECK(s.screenRadius < g.screenRadius);
+    // The body hugs the screen: its corner is the screen's plus the bezel, and the bezel is
+    // slim - a few percent of the screen width, not a phone body.
+    const int bezel = g.screen.left - g.body.left;
+    CHECK_INT(g.bodyRadius, g.screenRadius + bezel);
+    CHECK(bezel > 0 && bezel * 25 < width(g.screen));
 }
 
 void testLandscapeStream() {
@@ -140,10 +125,7 @@ void testLandscapeStream() {
     CHECK(g.landscape);
     CHECK(!g.cropped);
     CHECK(width(g.screen) > height(g.screen));
-    // the cut-out moved to the left edge and stood up
-    CHECK_INT(g.cutout.left, g.screen.left);
-    CHECK(height(g.cutout) > width(g.cutout));
-    CHECK(contains(g.screen, g.cutout));
+    CHECK(contains(g.body, g.screen));
 }
 
 // The interesting case: a 16:9 stream carrying a portrait screen with bars either side.
@@ -201,17 +183,78 @@ void testFrameAspect() {
     CHECK(portrait > 1170.0 / 2532.0);
 }
 
+void testRoundRectDistance() {
+    beginTest("roundRectDistance");
+    const RECT r{0, 0, 100, 200};
+    CHECK(approx(ui::roundRectDistance(50, 100, r, 20), -50.0, 1e-9));   // centre: half width in
+    CHECK(approx(ui::roundRectDistance(50, 0, r, 20), 0.0, 1e-9));       // on a straight edge
+    CHECK(approx(ui::roundRectDistance(50, -3, r, 20), 3.0, 1e-9));      // 3 px outside it
+    // The corner is a quarter circle around (20,20): the rect's own corner is outside it.
+    CHECK(approx(ui::roundRectDistance(0, 0, r, 20), 20.0 * 1.41421356 - 20.0, 1e-6));
+    CHECK(ui::roundRectDistance(3, 3, r, 0) < 0.0);                      // square corner: inside
+}
+
+unsigned alphaOf(unsigned px) { return px >> 24; }
+
+void testFrameEdge() {
+    beginTest("anti-aliased bezel overlay");
+    const ui::FrameGeometry g = ui::layoutDeviceFrame(SIZE{400, 860}, SIZE{1170, 2532},
+                                                      ui::lookupDevice(L"iPhone14,5"), false);
+    CHECK(g.valid);
+    const int w = 400, h = 860;
+    std::string buf(static_cast<size_t>(w) * h * 4, '\0');
+    auto* px = reinterpret_cast<unsigned*>(&buf[0]);
+    ui::paintFrameEdge(px, w, h, POINT{0, 0}, g, RGB(5, 5, 6), RGB(0x48, 0x48, 0x50));
+    auto at = [&](int x, int y) { return px[static_cast<size_t>(y) * w + x]; };
+
+    const int midY = (g.body.top + g.body.bottom) / 2;
+    const int bezelX = (g.body.left + g.screen.left) / 2;
+    CHECK_INT(alphaOf(at(bezelX, midY)), 255);                           // the bezel is opaque
+    CHECK_INT(alphaOf(at((g.screen.left + g.screen.right) / 2, midY)), 0);  // the picture shows
+    CHECK_INT(alphaOf(at(g.body.left, g.body.top)), 0);                 // outside the round corner
+
+    // The top-left corner is soft: a stepped (region) edge would have no partial pixels at
+    // all; a one-pixel anti-aliased arc has roughly one per pixel of arc length.
+    int partial = 0;
+    for (int y = g.body.top; y < g.body.top + g.bodyRadius; ++y)
+        for (int x = g.body.left; x < g.body.left + g.bodyRadius; ++x) {
+            const unsigned a = alphaOf(at(x, y));
+            if (a > 0 && a < 255) ++partial;
+        }
+    CHECK(partial >= g.bodyRadius);
+    // and along its diagonal alpha only climbs, from 0 to fully opaque
+    unsigned last = 0;
+    bool monotonic = true;
+    for (int i = 0; i < g.bodyRadius && last < 255; ++i) {
+        const unsigned a = alphaOf(at(g.body.left + i, g.body.top + i));
+        if (a < last) monotonic = false;
+        last = a;
+    }
+    CHECK(monotonic);
+    CHECK_INT(last, 255);
+
+    // Premultiplied: no colour channel exceeds alpha.
+    bool premul = true;
+    for (int i = 0; i < w * h; ++i) {
+        const unsigned p = px[i], a = p >> 24;
+        if (((p >> 16) & 0xff) > a || ((p >> 8) & 0xff) > a || (p & 0xff) > a) premul = false;
+    }
+    CHECK(premul);
+}
+
 } // namespace
 
 int main() {
     testLookupExact();
     testLookupFallback();
     testNativePortrait();
-    testNotchGeometry();
+    testCorners();
     testLandscapeStream();
     testPillarboxedStream();
     testDegenerate();
     testFrameAspect();
+    testRoundRectDistance();
+    testFrameEdge();
 
     std::printf("%s: %d tests, %d checks, %d failed\n", g_failed ? "FAILED" : "OK", g_tests,
                 g_checks, g_failed);
