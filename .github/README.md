@@ -15,5 +15,14 @@ Two jobs:
 - **lint-scripts** (`ubuntu-latest`, only when `scripts/**` exists) — `bash -n` on every
   `scripts/*.sh` and a `[Parser]::ParseFile` syntax check on every `scripts/*.ps1`.
 
+**release** (`workflows/release.yml`) publishes the GitHub release the in-app update check
+reads. It runs when `app/CMakeLists.txt` changes on `main`, or by hand (Actions → release →
+Run workflow, optionally as a draft). If the tag `v<version>` already exists it does nothing;
+otherwise it builds both exes, runs the tests, installs Inno Setup, packs with
+`make-portable.ps1 -MsysRoot <the runner's MSYS2>` and `make-installer.ps1 -SkipPortable`,
+and hands over to `publish-release.ps1 -SkipBuild` — the same tag, `.exe`, `.sha256` and
+notes (`installer/release-notes/v<version>.md`) as a release made by hand. To ship: bump
+`project(airplay_gui VERSION …)`, add the notes file, merge.
+
 **Artifact:** `dist/` is uploaded as **`uxplay-win64-ucrt64`** (kept 7 days). Download it from the
 run's summary page: Actions → the *build* run → *Artifacts*.
