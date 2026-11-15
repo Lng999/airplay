@@ -72,8 +72,12 @@ Ajan tarafı doğrulandı: `airplay_frame_tests` (tablo + geometri) ve `airplay_
 (gerçek d3d11videosink üzerinde gövde + çentik oyuğu + kırpma, kendi çektiği ekran
 görüntüsüyle) — 2026-08-22, yeşil. Model tanımlayıcısının geldiği de eski logdan doğrulandı
 (`iPhone14,5`). iPhone gerektirenler:
-- [ ] Bağlanınca çerçeve çıkıyor ve **iPhone 13'e benziyor**: çentik üstte, ekrandan oyulmuş
-      görünüyor, köşeler yuvarlak
+- [ ] Bağlanınca pencere **macOS iPhone Yansıtma gibi**: başlık çubuğu/kenarlık yok, ince
+      çerçeve, yuvarlak köşeler, köşelerin dışında masaüstü görünüyor. Sahte çentik/ada yok
+- [ ] **Dynamic Island:** bir Live Activity (zamanlayıcı, müzik) açıkken ada telefondaki gibi
+      genişliyor, üstünde ikinci bir sabit ada yok (Dynamic Island'lı iPhone ile)
+- [ ] Görüntüden tutup sürükle → pencere taşınıyor; kenardan boyutlandır; çift tık → tam ekran;
+      sağ tık → sistem menüsü (Kapat, Simge durumuna küçült, Tam ekran, Döndür)
 - [ ] Durum satırında model **"iPhone 13"** yazıyor (`iPhone14,5` değil)
 - [ ] Görüntü telefondaki ile aynı — kenarlardan kırpılmış ya da esnetilmiş değil
       (**önemli:** akışın bantlı gelip gelmediği burada anlaşılacak; günlükteki
@@ -81,8 +85,8 @@ görüntüsüyle) — 2026-08-22, yeşil. Model tanımlayıcısının geldiği d
 - [ ] Telefonu yan çevir → çerçeve de yan dönüyor. Dönmüyorsa `R` tuşu düzeltiyor mu?
 - [ ] `Telefon çerçevesi çiz` kutusunu kapat → düz görüntüye dönüyor, tekrar aç → çerçeve
       geri geliyor (yansıtma sürerken)
-- [ ] Tam ekranda (F11) çerçeve düzgün büyüyor, oyuk yerinde kalıyor
-- [ ] Pencereyi boyutlandırınca çerçeve oranı kilitli, oyuk kaymıyor
+- [ ] Tam ekranda (F11) çerçeve düzgün büyüyor; çıkınca yine kenarlıksız telefon penceresi
+- [ ] Pencereyi boyutlandırınca çerçeve oranı kilitli
 
 ## Phase 3 — Paket
 - [ ] MSYS2 kurulu olmayan temiz bir Windows'ta self-contained klasör çalışıyor
