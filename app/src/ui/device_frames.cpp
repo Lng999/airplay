@@ -40,6 +40,11 @@ const DeviceProfile kDevices[] = {
     {L"iPhone17,2", L"iPhone 16 Pro Max", 1320, 2868, Cutout::Island},
     {L"iPhone17,3", L"iPhone 16",         1179, 2556, Cutout::Island},
     {L"iPhone17,4", L"iPhone 16 Plus",    1290, 2796, Cutout::Island},
+    // 2025: identifiers per everymac.com, panels per Apple's spec pages
+    {L"iPhone18,1", L"iPhone 17 Pro",     1206, 2622, Cutout::Island},
+    {L"iPhone18,2", L"iPhone 17 Pro Max", 1320, 2868, Cutout::Island},
+    {L"iPhone18,3", L"iPhone 17",         1206, 2622, Cutout::Island},
+    {L"iPhone18,4", L"iPhone Air",        1260, 2736, Cutout::Island},
     // --- home button era, and the SE that kept it ---
     {L"iPhone12,8", L"iPhone SE (2. nesil)", 750, 1334, Cutout::None},
     {L"iPhone14,6", L"iPhone SE (3. nesil)", 750, 1334, Cutout::None},

@@ -59,6 +59,11 @@ void testLookupExact() {
     const ui::DeviceProfile q = ui::lookupDevice(L"iPhone15,4");
     CHECK(std::wstring(q.name) == L"iPhone 15");
     CHECK(q.cutout == ui::Cutout::Island);
+
+    // The 2025 phones are named, not shown as their identifier.
+    CHECK(ui::isKnownDevice(L"iPhone18,2"));
+    CHECK(std::wstring(ui::lookupDevice(L"iPhone18,2").name) == L"iPhone 17 Pro Max");
+    CHECK(std::wstring(ui::lookupDevice(L"iPhone18,4").name) == L"iPhone Air");
 }
 
 void testLookupFallback() {
