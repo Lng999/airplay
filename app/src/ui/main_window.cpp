@@ -4,6 +4,7 @@
 #include <ipifcons.h>
 #include <iphlpapi.h>
 #include <shellapi.h>
+#include <uxtheme.h>
 #include <ws2tcpip.h>
 
 #include <cstdio>
@@ -11,10 +12,12 @@
 
 #include "../res/resource.h"
 #include "autostart.h"
+#include "controls.h"
 #include "device_frames.h"
 #include "single_instance.h"
 #include "stale_receivers.h"
 #include "strings.h"
+#include "theme.h"
 #include "updater.h"
 #include "version.h"
 #include "video_embed.h"
@@ -62,8 +65,8 @@ enum : int {
     IDC_CHK_FRAME,
     IDC_BTN_TOGGLE,
     IDC_BTN_COPY,
-    IDC_SEC_ADVANCED,
-    IDC_SEC_DETAILS,
+    IDC_BTN_SETTINGS,
+    IDC_BTN_BACK,
     IDC_LIST_LOG
 };
 
@@ -83,22 +86,6 @@ const wchar_t* const kDecoderValues[] = {L"", L"d3d11h264dec", L"nvh264dec", L"a
 // -reset n: how long the client may stay silent. Index-matched pairs.
 const wchar_t* const kResetLabels[] = {str::kReset0, str::kReset15, str::kReset60};
 const int            kResetValues[] = {0, 15, 60};
-
-UINT dpiForWindow(HWND hwnd) {
-    using Fn = UINT(WINAPI*)(HWND);
-    if (HMODULE u32 = GetModuleHandleW(L"user32.dll")) {
-        auto fn = reinterpret_cast<Fn>(
-            reinterpret_cast<void*>(GetProcAddress(u32, "GetDpiForWindow")));
-        if (fn) {
-            UINT d = fn(hwnd);
-            if (d >= 72) return d;
-        }
-    }
-    HDC dc = GetDC(nullptr);
-    UINT d = dc ? static_cast<UINT>(GetDeviceCaps(dc, LOGPIXELSX)) : 96u;
-    if (dc) ReleaseDC(nullptr, dc);
-    return d ? d : 96u;
-}
 
 std::wstring getText(HWND h) {
     int n = GetWindowTextLengthW(h);
@@ -213,8 +200,11 @@ MainWindow::~MainWindow() {
     releaseVideo();
     host_.stop();
     joinStopThread();
-    if (fontUi_) DeleteObject(fontUi_);
-    if (fontStatus_) DeleteObject(fontStatus_);
+    for (HGDIOBJ o : {static_cast<HGDIOBJ>(fontUi_),
+                      static_cast<HGDIOBJ>(fontHead_), static_cast<HGDIOBJ>(fontTitle_),
+                      static_cast<HGDIOBJ>(fontMono_), static_cast<HGDIOBJ>(brWindow_),
+                      static_cast<HGDIOBJ>(brCard_)})
+        if (o) DeleteObject(o);
 }
 
 bool MainWindow::create() {
@@ -232,9 +222,10 @@ bool MainWindow::create() {
                                                IMAGE_ICON, GetSystemMetrics(SM_CXSMICON),
                                                GetSystemMetrics(SM_CYSMICON), LR_SHARED));
     wc.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
-    wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1);
+    wc.hbrBackground = nullptr;   // paintWindow() paints all of it, in the theme's colours
     wc.lpszClassName = kWindowClass;
     if (!RegisterClassExW(&wc) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) return false;
+    if (!registerControls(hinst_)) return false;
 
     int x = cfg_.x, y = cfg_.y, w = cfg_.w, h = cfg_.h;
     if (w < 200 || h < 200) {
@@ -279,8 +270,8 @@ LRESULT CALLBACK MainWindow::wndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM
 }
 
 void MainWindow::createFonts() {
-    if (fontUi_) DeleteObject(fontUi_);
-    if (fontStatus_) DeleteObject(fontStatus_);
+    for (HFONT f : {fontUi_, fontHead_, fontTitle_, fontMono_})
+        if (f) DeleteObject(f);
 
     NONCLIENTMETRICSW ncm{};
     ncm.cbSize = sizeof(ncm);
@@ -295,10 +286,18 @@ void MainWindow::createFonts() {
     base.lfHeight = -MulDiv(9, dpi_, 72);
     fontUi_ = CreateFontIndirectW(&base);
 
-    LOGFONTW big = lf;
-    big.lfHeight = -MulDiv(14, dpi_, 72);
-    big.lfWeight = FW_BOLD;
-    fontStatus_ = CreateFontIndirectW(&big);
+    LOGFONTW head = base;
+    head.lfWeight = FW_SEMIBOLD;
+    fontHead_ = CreateFontIndirectW(&head);
+
+    LOGFONTW title = lf;
+    title.lfHeight = -MulDiv(13, dpi_, 72);
+    title.lfWeight = FW_SEMIBOLD;
+    fontTitle_ = CreateFontIndirectW(&title);
+
+    LOGFONTW mono = base;
+    lstrcpynW(mono.lfFaceName, L"Consolas", LF_FACESIZE);
+    fontMono_ = CreateFontIndirectW(&mono);
 }
 
 void MainWindow::createControls() {
@@ -311,7 +310,7 @@ void MainWindow::createControls() {
     };
 
     status_ = mk(L"STATIC", str::kStateStopped, SS_LEFT | SS_ENDELLIPSIS, IDC_STATUS);
-    hint_   = mk(L"STATIC", str::kHintStopped, SS_LEFT | SS_ENDELLIPSIS, IDC_HINT);
+    hint_   = mk(L"STATIC", str::kHintStopped, SS_LEFT, IDC_HINT);   // wraps to two lines
 
     lblName_  = mk(L"STATIC", str::kLabelName, SS_LEFT, IDC_LBL_NAME);
     editName_ = mk(L"EDIT", L"", ES_AUTOHSCROLL | WS_TABSTOP, IDC_EDIT_NAME, WS_EX_CLIENTEDGE);
@@ -345,32 +344,33 @@ void MainWindow::createControls() {
     for (const wchar_t* a : kAudioSinks)
         SendMessageW(cmbAudio_, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(a));
 
-    chkFullscreen_  = mk(L"BUTTON", str::kChkFullscreen, BS_AUTOCHECKBOX | WS_TABSTOP,
-                         IDC_CHK_FULLSCREEN);
-    chkH265_        = mk(L"BUTTON", str::kChkH265, BS_AUTOCHECKBOX | WS_TABSTOP, IDC_CHK_H265);
-    chkDebug_       = mk(L"BUTTON", str::kChkDebug, BS_AUTOCHECKBOX | WS_TABSTOP,
-                         IDC_CHK_DEBUG);
-    chkAlwaysOnTop_ = mk(L"BUTTON", str::kChkAlwaysOnTop, BS_AUTOCHECKBOX | WS_TABSTOP,
-                         IDC_CHK_ALWAYSONTOP);
-    chkAutostart_   = mk(L"BUTTON", str::kChkAutostart, BS_AUTOCHECKBOX | WS_TABSTOP,
-                         IDC_CHK_AUTOSTART);
-    chkEmbed_       = mk(L"BUTTON", str::kChkEmbed, BS_AUTOCHECKBOX | WS_TABSTOP,
-                         IDC_CHK_EMBED);
-    chkLogon_       = mk(L"BUTTON", str::kChkLogon, BS_AUTOCHECKBOX | WS_TABSTOP,
-                         IDC_CHK_LOGON);
-    chkFrame_       = mk(L"BUTTON", str::kChkFrame, BS_AUTOCHECKBOX | WS_TABSTOP,
-                         IDC_CHK_FRAME);
+    // Switches and rounded buttons (controls.h); to this code they are checkboxes and buttons.
+    auto toggle = [&](const wchar_t* text, int id) { return mk(kToggleClass, text, WS_TABSTOP, id); };
+    chkFullscreen_  = toggle(str::kChkFullscreen, IDC_CHK_FULLSCREEN);
+    chkH265_        = toggle(str::kChkH265, IDC_CHK_H265);
+    chkDebug_       = toggle(str::kChkDebug, IDC_CHK_DEBUG);
+    chkAlwaysOnTop_ = toggle(str::kChkAlwaysOnTop, IDC_CHK_ALWAYSONTOP);
+    chkAutostart_   = toggle(str::kChkAutostart, IDC_CHK_AUTOSTART);
+    chkEmbed_       = toggle(str::kChkEmbed, IDC_CHK_EMBED);
+    chkLogon_       = toggle(str::kChkLogon, IDC_CHK_LOGON);
+    chkFrame_       = toggle(str::kChkFrame, IDC_CHK_FRAME);
 
-    btnToggle_ = mk(L"BUTTON", str::kBtnStart, BS_DEFPUSHBUTTON | WS_TABSTOP, IDC_BTN_TOGGLE);
-    btnCopy_   = mk(L"BUTTON", str::kBtnCopyCmd, BS_PUSHBUTTON | WS_TABSTOP, IDC_BTN_COPY);
+    // A normal-sized button on the receiver card: accent "Başlat", or a plain "Durdur" while
+    // it runs (updateButtons). Not a full-width bar.
+    btnToggle_   = mk(kPushClass, str::kBtnStart, WS_TABSTOP, IDC_BTN_TOGGLE);
+    hdrReceiver_ = mk(L"STATIC", str::kReceiverTitle, SS_LEFT, -1);
+    btnCopy_     = mk(kPushClass, str::kBtnCopyCmd, BS_FLAT | WS_TABSTOP, IDC_BTN_COPY);
+    btnSettings_ = mk(kPushClass, str::kBtnSettings, kQuietButton | WS_TABSTOP, IDC_BTN_SETTINGS);
+    btnBack_     = mk(kPushClass, str::kBtnBack, kQuietButton | WS_TABSTOP, IDC_BTN_BACK);
 
-    // Flat, left-aligned buttons so they read as section headers rather than actions.
-    secAdvanced_ = mk(L"BUTTON", str::kSecAdvanced, BS_PUSHBUTTON | BS_FLAT | BS_LEFT |
-                                                        WS_TABSTOP,
-                      IDC_SEC_ADVANCED);
-    secDetails_  = mk(L"BUTTON", str::kSecDetails, BS_PUSHBUTTON | BS_FLAT | BS_LEFT |
-                                                       WS_TABSTOP,
-                      IDC_SEC_DETAILS);
+    // Settings page title and group headings; -1 is the usual id of a static that sends nothing.
+    hdrTitle_   = mk(L"STATIC", str::kSettingsTitle, SS_LEFT, -1);
+    hdrGeneral_ = mk(L"STATIC", str::kGrpGeneral, SS_LEFT, -1);
+    hdrConn_    = mk(L"STATIC", str::kGrpConnection, SS_LEFT, -1);
+    hdrVideo_   = mk(L"STATIC", str::kGrpVideo, SS_LEFT, -1);
+    hdrAudio_   = mk(L"STATIC", str::kGrpAudio, SS_LEFT, -1);
+    hdrApp_     = mk(L"STATIC", str::kGrpApp, SS_LEFT, -1);
+    hdrLog_     = mk(L"STATIC", str::kGrpLog, SS_LEFT, -1);
 
     listLog_ = CreateWindowExW(WS_EX_CLIENTEDGE, L"LISTBOX", L"",
                                kChild | WS_VSCROLL | WS_HSCROLL | WS_TABSTOP | LBS_NOSEL |
@@ -389,10 +389,15 @@ void MainWindow::applyFonts() {
                   chkEmbed_,   chkLogon_,      chkFrame_,
                   lblFps_,     cmbFps_,         lblDecoder_,    cmbDecoder_,
                   lblReset_,   cmbReset_,
-                  btnToggle_,  btnCopy_,        secAdvanced_,   secDetails_,    listLog_};
+                  btnToggle_,  btnCopy_,        btnSettings_,   btnBack_};
     for (HWND h : all)
         if (h) SendMessageW(h, WM_SETFONT, reinterpret_cast<WPARAM>(fontUi_), TRUE);
-    if (status_) SendMessageW(status_, WM_SETFONT, reinterpret_cast<WPARAM>(fontStatus_), TRUE);
+    for (HWND h : {hdrGeneral_, hdrConn_, hdrVideo_, hdrAudio_, hdrApp_, hdrLog_})
+        if (h) SendMessageW(h, WM_SETFONT, reinterpret_cast<WPARAM>(fontHead_), TRUE);
+    for (HWND h : {hdrTitle_, hdrReceiver_})
+        if (h) SendMessageW(h, WM_SETFONT, reinterpret_cast<WPARAM>(fontTitle_), TRUE);
+    if (btnToggle_) SendMessageW(btnToggle_, WM_SETFONT, reinterpret_cast<WPARAM>(fontHead_), TRUE);
+    if (listLog_) SendMessageW(listLog_, WM_SETFONT, reinterpret_cast<WPARAM>(fontMono_), TRUE);
 }
 
 void MainWindow::layout() {
@@ -401,97 +406,160 @@ void MainWindow::layout() {
     GetClientRect(hwnd_, &rc);
     const int W = rc.right - rc.left;
     const int H = rc.bottom - rc.top;
-    const int m = s(14);
+    const int m = s(16);
     const int contentW = W - 2 * m;
 
     auto place = [](HWND h, int x, int y, int w, int hh) {
         if (h) SetWindowPos(h, nullptr, x, y, w, hh, SWP_NOZORDER | SWP_NOACTIVATE);
     };
 
-    // Single top-to-bottom flow: what the user needs first is highest up, and a collapsed
-    // group simply does not advance y, so nothing above it moves.
-    int y = s(12);
-    const int textX = m + s(22);        // leaves room for the status dot
-    const int textW = contentW - s(22);
-    place(status_, textX, y, textW, s(28));
-    y += s(30);
-    place(hint_, textX, y, textW, s(18));
-    y += s(32);
+    int y = s(16);
+    if (!settingsPage_) {
+        // --- the receiver card: "AirPlay alıcısı" with Başlat/Durdur at the right, the state
+        //     with its dot, what to do next (or who is connected) in up to two quieter lines ---
+        const int pad = s(16);
+        const int top = y;
+        const int btnW = s(96);
+        place(hdrReceiver_, m + pad, y + pad - s(1), contentW - 2 * pad - btnW - s(8), s(28));
+        place(btnToggle_, W - m - pad - btnW, y + pad - s(2), btnW, s(32));
+        const int stateY = y + pad + s(32);
+        place(status_, m + pad + s(16), stateY, contentW - 2 * pad - s(16), s(18));
+        place(hint_, m + pad, stateY + s(24), contentW - 2 * pad, s(36));
+        statusCard_ = RECT{m, top, W - m, stateY + s(24) + s(36) + pad - s(4)};
+        y = statusCard_.bottom + s(12);
 
-    place(lblName_, m, y + s(5), s(132), s(16));
-    place(editName_, m + s(136), y, s(180), s(24));
-    y += s(38);
+        // --- three switches on one card, a hairline between rows (paintWindow) ---
+        const int rowH = s(44);
+        toggleCard_ = RECT{m, y, W - m, y + 3 * rowH};
+        int ty = y;
+        for (HWND h : {chkEmbed_, chkFrame_, chkAlwaysOnTop_}) {
+            place(h, m + pad, ty + (rowH - s(30)) / 2, contentW - 2 * pad, s(30));
+            ty += rowH;
+        }
+        y += 3 * rowH + s(8);
 
-    place(btnToggle_, m, y, s(160), s(34));
-    y += s(48);
+        // Settings is one quiet line under the cards, not a button on them.
+        place(btnSettings_, W - m - s(96), y, s(96), s(28));
+        y += s(28) + s(10);
+        contentH_ = y;
+    } else {
+        statusCard_ = toggleCard_ = RECT{};
+        place(btnBack_, m, y, s(90), s(30));
+        place(hdrTitle_, m + s(104), y + s(3), contentW - s(104), s(26));
+        y += s(30) + s(14);
 
-    // --- advanced (collapsible) ---
-    place(secAdvanced_, m, y, s(160), s(22));
-    y += s(26);
-    if (showAdvanced_) {
-        place(lblPort_, m, y + s(5), s(36), s(16));
-        place(editPort_, m + s(40), y, s(70), s(24));
-        place(lblFps_, m + s(126), y + s(5), s(60), s(16));
-        place(cmbFps_, m + s(188), y, s(150), s(220));
-        y += s(32);
-        place(lblVideo_, m, y + s(5), s(88), s(16));
-        place(cmbVideo_, m + s(92), y, s(170), s(220));
+        // Two columns so the page stays short enough for a laptop screen at 150 %.
+        const int gap = s(28);
+        const int colW = (contentW - gap) / 2;
+        const int lblW = s(118);
+        auto column = [&](int x, int top, auto&& body) {
+            int cy = top;
+            auto heading = [&](HWND h) {
+                place(h, x, cy + s(6), colW, s(18));
+                cy += s(30);
+            };
+            auto row = [&](HWND lbl, HWND ctl, int dropH) {
+                place(lbl, x, cy + s(5), lblW, s(16));
+                place(ctl, x + lblW + s(6), cy, colW - lblW - s(6), dropH);   // combos: + list
+                cy += s(32);
+            };
+            auto sw = [&](HWND h) {
+                place(h, x, cy, colW, s(28));
+                cy += s(32);
+            };
+            body(heading, row, sw);
+            return cy;
+        };
+        const int left = column(m, y, [&](auto heading, auto row, auto sw) {
+            heading(hdrGeneral_);
+            row(lblName_, editName_, s(24));
+            heading(hdrConn_);
+            row(lblPort_, editPort_, s(24));
+            row(lblReset_, cmbReset_, s(220));
+            heading(hdrAudio_);
+            row(lblAudio_, cmbAudio_, s(220));
+            (void) sw;
+        });
+        const int right = column(m + colW + gap, y, [&](auto heading, auto row, auto sw) {
+            heading(hdrVideo_);
+            row(lblFps_, cmbFps_, s(220));
+            row(lblVideo_, cmbVideo_, s(220));
+            row(lblDecoder_, cmbDecoder_, s(220));
+            sw(chkFullscreen_);
+            sw(chkH265_);
+            heading(hdrApp_);
+            sw(chkAutostart_);
+            sw(chkLogon_);
+            sw(chkDebug_);
+        });
+        y = (left > right ? left : right) + s(10);
+        place(btnCopy_, m, y, s(150), s(30));
+        y += s(30) + s(8);
+
+        place(hdrLog_, m, y + s(6), contentW, s(18));
         y += s(30);
-        place(lblDecoder_, m, y + s(5), s(88), s(16));
-        place(cmbDecoder_, m + s(92), y, s(190), s(220));
-        y += s(30);
-        place(lblAudio_, m, y + s(5), s(88), s(16));
-        place(cmbAudio_, m + s(92), y, s(170), s(220));
-        y += s(30);
-        place(lblReset_, m, y + s(5), s(120), s(16));
-        place(cmbReset_, m + s(124), y, s(220), s(220));
-        y += s(32);
-        place(chkFullscreen_, m, y, s(88), s(20));
-        place(chkH265_, m + s(92), y, s(62), s(20));
-        place(chkDebug_, m + s(158), y, s(122), s(20));
-        y += s(24);
-        place(chkAlwaysOnTop_, m, y, s(118), s(20));
-        place(chkAutostart_, m + s(124), y, s(170), s(20));
-        y += s(24);
-        place(chkEmbed_, m, y, s(210), s(20));
-        place(chkLogon_, m + s(216), y, s(210), s(20));
-        y += s(24);
-        place(chkFrame_, m, y, s(210), s(20));
-        y += s(28);
-        place(btnCopy_, m, y, s(140), s(28));
-        y += s(36);
-    }
-
-    // --- details / log (collapsible) ---
-    place(secDetails_, m, y, s(160), s(22));
-    y += s(26);
-    logTop_ = y;
-    if (showDetails_) {
+        const int minLog = s(140);
         int listH = H - y - m;
-        if (listH < s(60)) listH = s(60);
+        if (listH < minLog) listH = minLog;
         place(listLog_, m, y, contentW, listH);
+        contentH_ = y + minLog + m;
     }
 
     InvalidateRect(hwnd_, nullptr, TRUE);
 }
 
-void MainWindow::applySectionVisibility() {
-    const int adv = showAdvanced_ ? SW_SHOW : SW_HIDE;
-    for (HWND h : {lblPort_, editPort_, lblFps_, cmbFps_, lblVideo_, cmbVideo_, lblDecoder_,
-                   cmbDecoder_, lblAudio_, cmbAudio_, lblReset_, cmbReset_, chkFullscreen_,
-                   chkH265_, chkDebug_, chkAlwaysOnTop_, chkAutostart_, chkEmbed_,
-                   chkLogon_, chkFrame_, btnCopy_})
-        if (h) ShowWindow(h, adv);
-    if (listLog_) ShowWindow(listLog_, showDetails_ ? SW_SHOW : SW_HIDE);
+void MainWindow::applyPageVisibility() {
+    const int onMain = settingsPage_ ? SW_HIDE : SW_SHOW;
+    const int onSettings = settingsPage_ ? SW_SHOW : SW_HIDE;
+    for (HWND h : {status_, hint_, hdrReceiver_, btnToggle_, btnSettings_, chkEmbed_, chkFrame_,
+                   chkAlwaysOnTop_})
+        if (h) ShowWindow(h, onMain);
+    for (HWND h : {btnBack_, hdrTitle_, hdrGeneral_, hdrConn_, hdrVideo_, hdrAudio_, hdrApp_,
+                   hdrLog_, lblName_, editName_, lblPort_, editPort_, lblFps_, cmbFps_,
+                   lblVideo_, cmbVideo_, lblDecoder_, cmbDecoder_, lblAudio_, cmbAudio_,
+                   lblReset_, cmbReset_, chkFullscreen_, chkH265_, chkDebug_, chkAutostart_,
+                   chkLogon_, btnCopy_, listLog_})
+        if (h) ShowWindow(h, onSettings);
+}
 
-    if (secAdvanced_)
-        SetWindowTextW(secAdvanced_,
-                       (std::wstring(showAdvanced_ ? str::kSecOpen : str::kSecClosed) +
-                        str::kSecAdvanced).c_str());
-    if (secDetails_)
-        SetWindowTextW(secDetails_,
-                       (std::wstring(showDetails_ ? str::kSecOpen : str::kSecClosed) +
-                        str::kSecDetails).c_str());
+void MainWindow::applyTheme() {
+    const Palette p = paletteFor(systemPrefersDark(), systemAccent());
+    activePalette() = p;
+    if (brWindow_) DeleteObject(brWindow_);
+    if (brCard_) DeleteObject(brCard_);
+    brWindow_ = CreateSolidBrush(p.window);
+    brCard_   = CreateSolidBrush(p.card);
+    useDarkTitleBar(hwnd_, p.dark);
+    // The native fields keep their themed borders and arrows; in dark mode Windows' own
+    // dark variants of those themes. An unknown theme name falls back to the default.
+    const wchar_t* fieldTheme = p.dark ? L"DarkMode_CFD" : nullptr;
+    for (HWND h : {editName_, editPort_, cmbVideo_, cmbAudio_, cmbFps_, cmbDecoder_, cmbReset_})
+        if (h) SetWindowTheme(h, fieldTheme, nullptr);
+    if (listLog_) SetWindowTheme(listLog_, p.dark ? L"DarkMode_Explorer" : nullptr, nullptr);
+    RedrawWindow(hwnd_, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_FRAME);
+}
+
+void MainWindow::paintWindow(HDC dc, const RECT& client) {
+    const Palette& p = activePalette();
+    FillRect(dc, &client, brWindow_ ? brWindow_ : GetSysColorBrush(COLOR_WINDOW));
+    if (settingsPage_) return;
+
+    const float radius = static_cast<float>(s(12));
+    paintRoundRect(dc, statusCard_, radius, p.card, p.border, 1.0f);
+    paintRoundRect(dc, toggleCard_, radius, p.card, p.border, 1.0f);
+    // Hairlines between the toggle rows.
+    const int rows = 3, rowH = (toggleCard_.bottom - toggleCard_.top) / rows;
+    HBRUSH line = CreateSolidBrush(p.border);
+    for (int i = 1; i < rows; ++i) {
+        const RECT r{toggleCard_.left + s(16), toggleCard_.top + i * rowH,
+                     toggleCard_.right - s(16), toggleCard_.top + i * rowH + 1};
+        FillRect(dc, &r, line);
+    }
+    DeleteObject(line);
+    // The state's dot, at the start of the state line.
+    const float d = static_cast<float>(s(8));
+    paintCircle(dc, statusCard_.left + s(16) + d / 2, statusCard_.top + s(16) + s(32) + s(9),
+                d / 2, stateColor(state_));
 }
 
 // --- updates ---------------------------------------------------------------------------------
@@ -652,25 +720,25 @@ void MainWindow::onUpdateDownloaded(UpdateResult* r) {
     doExit();
 }
 
+int MainWindow::chromeWidth() const {
+    RECT r{0, 0, 100, 100};
+    AdjustWindowRectEx(&r, WS_OVERLAPPEDWINDOW, FALSE, 0);
+    return (r.right - r.left) - 100;
+}
+
 int MainWindow::chromeHeight() const {
     RECT r{0, 0, 100, 100};
     AdjustWindowRectEx(&r, WS_OVERLAPPEDWINDOW, FALSE, 0);
     return (r.bottom - r.top) - 100;
 }
 
-// Grow/shrink the window so the visible sections fit exactly. The user's width is kept:
-// only the height follows the sections.
+// Each page has its own size: the main page is a narrow card stack, the settings page two
+// columns and the log. The window's top-left corner stays where it is.
 void MainWindow::resizeToContent() {
     if (!hwnd_ || IsIconic(hwnd_) || IsZoomed(hwnd_)) return;
-    RECT wr{};
-    if (!GetWindowRect(hwnd_, &wr)) return;
-    const int client = logTop_ + (showDetails_ ? s(170) : 0) + s(14);
-    // The hint line is the widest thing in the window; a narrower window would ellipsize
-    // the one sentence that tells the user what to do.
-    int width = wr.right - wr.left;
-    if (width < s(500)) width = s(500);
-    SetWindowPos(hwnd_, nullptr, 0, 0, width, client + chromeHeight(),
-                 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+    const int width = settingsPage_ ? s(720) : s(400);
+    SetWindowPos(hwnd_, nullptr, 0, 0, width + chromeWidth(), contentH_ + chromeHeight(),
+                 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);   // WM_SIZE lays out again
 }
 
 void MainWindow::controlsFromConfig() {
@@ -765,29 +833,21 @@ void MainWindow::updateStatus() {
             if (!ipv4_.empty()) hint += L" (" + ipv4_ + L")";
             break;
         case airplay::HostState::Connected:
+        {
             text = str::kStateConnected;
-            hint = clientName_.empty() ? std::wstring(str::kHintUnknownClient) : clientName_;
-            if (!clientModel_.empty()) {
-                // "iPhone 13" reads better than "iPhone14,5"; fall back to the identifier
-                // for a model the table does not know rather than inventing a name.
-                const std::wstring& named = deviceDisplayName(clientModel_);
-                hint += L" (" + (named.empty() ? clientModel_ : named) + L")";
-            }
-            if (!resolutionText_.empty()) hint += L" · " + resolutionText_;
-            if (currentKbps_ > 0) {
-                wchar_t br[32];
-                if (currentKbps_ >= 1000)
-                    _snwprintf(br, 32, L" · %.1f Mbps", currentKbps_ / 1000.0);
-                else
-                    _snwprintf(br, 32, L" · %d kbps", currentKbps_);
-                hint += br;
-            }
-            if (currentFps_ > 0) {
-                wchar_t fps[32];
-                _snwprintf(fps, 32, L" · %d fps", currentFps_);
-                hint += fps;
-            }
+            // Who, in words: "iPhone 17 Pro Max", and the phone's own name when it is not just
+            // "iPhone". Size, bitrate and frame rate stay in the log and the picture's title.
+            const std::wstring& named = clientModel_.empty() ? std::wstring()
+                                                             : deviceDisplayName(clientModel_);
+            hint = !named.empty() ? named
+                 : !clientName_.empty() ? clientName_
+                 : !clientModel_.empty() ? clientModel_ : std::wstring(str::kHintUnknownClient);
+            if (!named.empty() && !clientName_.empty() && clientName_ != L"iPhone" &&
+                clientName_ != L"iPad")
+                hint += L" · " + clientName_;
+            hint += L" → " + cfg_.name;
             break;
+        }
         case airplay::HostState::Stopping:
             text = str::kStateStopping;
             break;
@@ -799,8 +859,7 @@ void MainWindow::updateStatus() {
     }
     SetWindowTextW(status_, text.c_str());
     SetWindowTextW(hint_, hint.c_str());
-    RECT dot{0, 0, s(40), s(48)};
-    InvalidateRect(hwnd_, &dot, TRUE);
+    InvalidateRect(hwnd_, &statusCard_, FALSE);   // the dot
 
     const std::wstring title = std::wstring(str::kAppName) + str::kTitleSep + text;
     tray_.setTip(title);
@@ -812,6 +871,11 @@ void MainWindow::updateButtons() {
     const bool running = state_ != airplay::HostState::Stopped &&
                          state_ != airplay::HostState::Error;
     SetWindowTextW(btnToggle_, running ? str::kBtnStop : str::kBtnStart);
+    // Start is the one accent action; Stop is a plain bordered button.
+    LONG_PTR style = GetWindowLongPtrW(btnToggle_, GWL_STYLE);
+    style = running ? (style | BS_FLAT) : (style & ~static_cast<LONG_PTR>(BS_FLAT));
+    SetWindowLongPtrW(btnToggle_, GWL_STYLE, style);
+    InvalidateRect(btnToggle_, nullptr, FALSE);
     // Starting/Stopping are transient: the button would act on a state that is about to
     // change, so it stays disabled until the child has settled.
     // The stop worker also counts: its Stopped event arrives before WM_HOST_STOPPED does.
@@ -1088,15 +1152,8 @@ void MainWindow::onHostEvent(const airplay::HostEvent& ev) {
             state_ = ev.state;
             if (state_ == airplay::HostState::Error && !ev.message.empty())
                 lastError_ = widen(ev.message);
-            // The cause is a log line the user cannot see while Details is collapsed, and a
-            // one-line hint always truncates it. Open the section for them - only for this
-            // session, so it is not written back to config.ini as a preference.
-            if (state_ == airplay::HostState::Error && !showDetails_) {
-                showDetails_ = true;
-                applySectionVisibility();
-                layout();
-                resizeToContent();
-            }
+            // The cause is in the hint (two lines on the status card) and in the log on the
+            // settings page; the page is not switched under the user.
             if (state_ != airplay::HostState::Connected) {
                 currentFps_  = 0;
                 currentKbps_ = 0;
@@ -1210,18 +1267,14 @@ void MainWindow::onCommand(int id, int code) {
         case IDC_BTN_COPY:
             doCopyCmdline();
             break;
-        case IDC_SEC_ADVANCED:
-        case IDC_SEC_DETAILS: {
-            bool& flag = (id == IDC_SEC_ADVANCED) ? showAdvanced_ : showDetails_;
-            flag = !flag;
-            cfg_.showAdvanced = showAdvanced_;
-            cfg_.showDetails  = showDetails_;
-            applySectionVisibility();
+        case IDC_BTN_SETTINGS:
+        case IDC_BTN_BACK:
+            settingsPage_ = id == IDC_BTN_SETTINGS;
+            applyPageVisibility();
             layout();
             resizeToContent();
-            store_.save(cfg_);
+            SetFocus(settingsPage_ ? btnBack_ : btnSettings_);
             break;
-        }
         case IDC_CHK_ALWAYSONTOP:
             cfg_.alwaysOnTop = isChecked(chkAlwaysOnTop_);
             applyAlwaysOnTop();
@@ -1304,9 +1357,8 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
                                         : L"runtime: " + cfg_.msysRoot);
 
             controlsFromConfig();
-            showAdvanced_ = cfg_.showAdvanced;
-            showDetails_  = cfg_.showDetails;
-            applySectionVisibility();
+            applyTheme();
+            applyPageVisibility();
 
             if (cfg_.w < 200 || cfg_.h < 200)
                 SetWindowPos(hwnd_, nullptr, 0, 0, s(500), s(300),
@@ -1402,31 +1454,72 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
             onCommand(LOWORD(wp), HIWORD(wp));
             return 0;
 
+        // Double-buffered so a resize or a page switch does not flicker through white.
         case WM_PAINT: {
             PAINTSTRUCT ps{};
             HDC dc = BeginPaint(hwnd_, &ps);
-            const int d = s(13);
-            const int x = s(14);
-            const int yy = s(12) + (s(28) - d) / 2;
-            const COLORREF c = stateColor(state_);
-            HBRUSH br = CreateSolidBrush(c);
-            HPEN   pen = CreatePen(PS_SOLID, 1, c);
-            HGDIOBJ oldBr = SelectObject(dc, br);
-            HGDIOBJ oldPen = SelectObject(dc, pen);
-            Ellipse(dc, x, yy, x + d, yy + d);
-            SelectObject(dc, oldBr);
-            SelectObject(dc, oldPen);
-            DeleteObject(br);
-            DeleteObject(pen);
+            RECT rc{};
+            GetClientRect(hwnd_, &rc);
+            HDC mem = CreateCompatibleDC(dc);
+            HBITMAP bmp = CreateCompatibleBitmap(dc, rc.right, rc.bottom);
+            HGDIOBJ old = SelectObject(mem, bmp);
+            paintWindow(mem, rc);
+            BitBlt(dc, 0, 0, rc.right, rc.bottom, mem, 0, 0, SRCCOPY);
+            SelectObject(mem, old);
+            DeleteObject(bmp);
+            DeleteDC(mem);
             EndPaint(hwnd_, &ps);
             return 0;
         }
 
+        case WM_ERASEBKGND:
+            return 1;
+
+        // Labels and the status lines: on the card (main page) or on the window (settings).
         case WM_CTLCOLORSTATIC: {
+            const Palette& p = activePalette();
             auto dc = reinterpret_cast<HDC>(wp);
+            auto ctl = reinterpret_cast<HWND>(lp);
             SetBkMode(dc, TRANSPARENT);
-            return reinterpret_cast<LRESULT>(GetSysColorBrush(COLOR_BTNFACE));
+            const bool onCard = ctl == status_ || ctl == hint_ || ctl == hdrReceiver_;
+            SetTextColor(dc, ctl == hint_ ? p.textMuted : p.text);
+            // Read-only / disabled edits come here too: give them the field colour.
+            if (ctl == editName_ || ctl == editPort_) {
+                SetBkColor(dc, p.card);
+                SetTextColor(dc, p.textMuted);
+                return reinterpret_cast<LRESULT>(brCard_);
+            }
+            return reinterpret_cast<LRESULT>(onCard ? brCard_ : brWindow_);
         }
+
+        // The custom controls ask for the surface they sit on.
+        case WM_CTLCOLORBTN: {
+            auto ctl = reinterpret_cast<HWND>(lp);
+            const bool onCard = !settingsPage_ && (ctl == chkEmbed_ || ctl == chkFrame_ ||
+                                                   ctl == chkAlwaysOnTop_ || ctl == btnToggle_);
+            return reinterpret_cast<LRESULT>(onCard ? brCard_ : brWindow_);
+        }
+
+        // Fields and the log: the card colour, readable in both themes.
+        case WM_CTLCOLOREDIT:
+        case WM_CTLCOLORLISTBOX: {
+            const Palette& p = activePalette();
+            auto dc = reinterpret_cast<HDC>(wp);
+            SetTextColor(dc, p.text);
+            SetBkColor(dc, p.card);
+            return reinterpret_cast<LRESULT>(brCard_);
+        }
+
+        // Windows switched between light and dark app mode.
+        case WM_SETTINGCHANGE:
+            if (lp && lstrcmpiW(reinterpret_cast<const wchar_t*>(lp), L"ImmersiveColorSet") == 0)
+                applyTheme();
+            break;
+
+        // ...or the user picked another accent colour.
+        case WM_DWMCOLORIZATIONCOLORCHANGED:
+            applyTheme();
+            break;
 
         case WM_SIZE:
             if (wp != SIZE_MINIMIZED) layout();
@@ -1434,10 +1527,9 @@ LRESULT MainWindow::wndProc(UINT msg, WPARAM wp, LPARAM lp) {
 
         case WM_GETMINMAXINFO: {
             auto* mmi = reinterpret_cast<MINMAXINFO*>(lp);
-            mmi->ptMinTrackSize.x = s(500);
-            // logTop_ is 0 until the first layout(); s(250) covers the collapsed window.
-            mmi->ptMinTrackSize.y = (logTop_ > 0 ? logTop_ : s(250)) +
-                                    (showDetails_ ? s(80) : 0) + s(14) + chromeHeight();
+            mmi->ptMinTrackSize.x = (settingsPage_ ? s(680) : s(360)) + chromeWidth();
+            // contentH_ is 0 until the first layout(); s(300) covers the main page.
+            mmi->ptMinTrackSize.y = (contentH_ > 0 ? contentH_ : s(300)) + chromeHeight();
             return 0;
         }
 

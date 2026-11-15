@@ -46,6 +46,7 @@ endif()
 add_executable(airplay-gui WIN32
     src/ui/main.cpp
     src/ui/main_window.cpp
+    src/ui/controls.cpp
     src/ui/tray.cpp
     src/ui/config_store.cpp
     src/ui/stale_receivers.cpp
@@ -68,6 +69,7 @@ target_include_directories(airplay-gui PRIVATE
 target_link_libraries(airplay-gui PRIVATE
     airplay_host
     shell32 ole32 comctl32 user32 gdi32 advapi32 iphlpapi ws2_32 winhttp bcrypt
+    d2d1 dwmapi uxtheme
 )
 
 # WIN32 already implies -mwindows; -municode selects the wWinMain entry point and -static

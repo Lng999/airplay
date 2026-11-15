@@ -52,6 +52,13 @@ Hata:   `● Hata` / `<mesaj>`
 
 Nokta owner-draw değil: sahibi olan pencere `WM_PAINT` içinde `Ellipse` ile çizer.
 
+> **Güncelleme (ana pencere yenilemesi):** Proje sahibinin onayıyla ana pencere artık iki sayfalı
+> (ana sayfa + Ayarlar) ve Windows'un açık/koyu temasını izliyor. Açma-kapama düğmeleri ve
+> yuvarlak düğmeler iki küçük özel kontrol (`app/src/ui/controls.*`, Direct2D); dışarıya karşı
+> `BUTTON` sözleşmesini aynen koruyorlar. Durum noktası ve kartlar `WM_PAINT` içinde Direct2D
+> ile çiziliyor. Ayrıntı: `app/README.md` "main window". Aşağıdaki "Gelişmiş bölümü" düzeni bu
+> sürümde Ayarlar sayfasına taşındı.
+
 ## Gelişmiş bölümü (katlanır, varsayılan kapalı)
 
 Port · Görüntü çıkışı · Ses çıkışı · Tam ekran · H.265 · Ayrıntılı günlük ·

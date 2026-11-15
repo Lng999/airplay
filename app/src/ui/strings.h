@@ -50,7 +50,7 @@ inline constexpr const wchar_t* kStateStopping = L"Durduruluyor…";
 inline constexpr const wchar_t* kStateError    = L"Hata";
 
 // Second line: what the user should do next.
-inline constexpr const wchar_t* kHintStopped   = L"Alıcıyı başlatmak için Başlat'a basın";
+inline constexpr const wchar_t* kHintStopped   = L"iPhone'dan yansıtmak için alıcıyı başlatın";
 inline constexpr const wchar_t* kHintWaitingPre= L"iPhone: Denetim Merkezi → Ekran Yansıtma → ";
 inline constexpr const wchar_t* kHintUnknownClient = L"Bir cihaz bağlandı";
 inline constexpr const wchar_t* kHintUnknownError  = L"Bilinmeyen hata";
@@ -102,12 +102,19 @@ inline constexpr const wchar_t* kReset60 = L"60 saniye";
 // --- buttons / sections -----------------------------------------------------
 inline constexpr const wchar_t* kBtnStart    = L"Başlat";
 inline constexpr const wchar_t* kBtnStop     = L"Durdur";
+// Title of the receiver card on the main page.
+inline constexpr const wchar_t* kReceiverTitle = L"AirPlay alıcısı";
 inline constexpr const wchar_t* kBtnCopyCmd  = L"Komutu kopyala";
-inline constexpr const wchar_t* kSecAdvanced = L"Gelişmiş";
-inline constexpr const wchar_t* kSecDetails  = L"Ayrıntılar";
-// Prefix on a section button; the glyphs live in Segoe UI itself, no symbol font needed.
-inline constexpr const wchar_t* kSecClosed   = L"► ";   // right-pointing triangle
-inline constexpr const wchar_t* kSecOpen     = L"▼ ";   // down-pointing triangle
+inline constexpr const wchar_t* kBtnSettings = L"Ayarlar…";
+inline constexpr const wchar_t* kBtnBack     = L"‹  Geri";
+// The settings page: its title and group headings.
+inline constexpr const wchar_t* kSettingsTitle = L"Ayarlar";
+inline constexpr const wchar_t* kGrpGeneral    = L"Genel";
+inline constexpr const wchar_t* kGrpConnection = L"Bağlantı";
+inline constexpr const wchar_t* kGrpVideo      = L"Görüntü";
+inline constexpr const wchar_t* kGrpAudio      = L"Ses";
+inline constexpr const wchar_t* kGrpApp        = L"Uygulama";
+inline constexpr const wchar_t* kGrpLog        = L"Günlük";
 
 // --- messages ---------------------------------------------------------------
 inline constexpr const wchar_t* kErrNoUxplay =

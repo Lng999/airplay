@@ -89,19 +89,25 @@ own runtime, and `%APPDATA%\config.ini` is shared with every other copy on the m
 honouring a path from there would let one copy run another copy's binaries. Detected paths
 are not written back either; only a path a human typed into the file survives a save.
 
-The window is Turkish and collapsed by default (`docs/PHASE2-UX-SPEC.md`): a coloured status
-dot, the state, one line saying what to do next, the receiver name and a single Start/Stop
-button. Two section headers open the rest:
+The window is Turkish and follows Windows' light/dark app mode (`src/ui/theme.h`, re-read on
+`WM_SETTINGCHANGE "ImmersiveColorSet"`; dark mode also gets a dark caption). It has two pages:
 
-- **Gelişmiş** — port, **Akıcılık** (the frame-rate ceiling), video/audio sink, **Görüntü
-  çözücü** (decoder), Bağlantı zaman aşımı, Fullscreen, H.265, Ayrıntılı günlük (debug),
-  Always on top, Start receiver on launch, **Görüntüyü uygulamada göster** (the picture
-  window, see below), **Windows açılışında başlat**, **Telefon çerçevesi çiz** and
-  *Komutu kopyala* (the exact argv,
-  for reproducing a problem in a plain terminal).
-- **Ayrıntılar** — the last 500 log lines.
+- **Main:** a card with **AirPlay alıcısı** and a normal-sized *Başlat* button at its right
+  (accent; a plain bordered *Durdur* while the receiver runs), the state with its coloured dot, and what to do next or which phone is connected ("iPhone 17 Pro Max
+  → AirPlay-PC"); a second card with three switches: **Görüntüyü uygulamada göster** (the
+  picture window, see below), **Telefon çerçevesi çiz**, Her zaman üstte; and a quiet
+  *Ayarlar…* link under them. The one colour is the user's Windows accent colour.
+- **Ayarlar:** *Geri*, then two columns - *Genel* (the receiver name), *Bağlantı* (port,
+  Bağlantı zaman aşımı), *Ses* (audio sink) | *Görüntü* (**Akıcılık**, the frame-rate ceiling;
+  video sink; **Görüntü çözücü**; fullscreen; H.265), *Uygulama* (start receiver on launch,
+  **Windows açılışında başlat**, Ayrıntılı günlük) - *Komutu kopyala* (the exact argv, for
+  reproducing a problem in a plain terminal) and the log (last 500 lines, Consolas).
 
-Opening or closing a section re-fits the window height and is remembered in `config.ini`.
+The switches and the rounded buttons are two small custom controls (`src/ui/controls.*`)
+drawn with Direct2D. To the rest of the window they are a `BS_AUTOCHECKBOX` and a push
+button - `BM_GETCHECK`/`BM_SETCHECK`, `BN_CLICKED`, Space, disabled state - which
+`app/tests/test_controls.cpp` holds them to. Edits, combo boxes and the log stay native,
+coloured through `WM_CTLCOLOR*` and, in dark mode, Windows' `DarkMode_CFD` theme.
 Receiver settings are greyed out while the child runs — UxPlay only reads its argv at
 startup, so a change needs a restart.
 

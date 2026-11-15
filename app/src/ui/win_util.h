@@ -17,4 +17,22 @@ inline bool rectOnSomeMonitor(const RECT& r) {
     return MonitorFromRect(&r, MONITOR_DEFAULTTONULL) != nullptr;
 }
 
+// The window's DPI. GetDpiForWindow is looked up at run time (Windows 10 1607+); before
+// that, the system DPI.
+inline UINT dpiForWindow(HWND hwnd) {
+    using Fn = UINT(WINAPI*)(HWND);
+    if (HMODULE u32 = GetModuleHandleW(L"user32.dll")) {
+        auto fn = reinterpret_cast<Fn>(
+            reinterpret_cast<void*>(GetProcAddress(u32, "GetDpiForWindow")));
+        if (fn) {
+            UINT d = fn(hwnd);
+            if (d >= 72) return d;
+        }
+    }
+    HDC dc = GetDC(nullptr);
+    UINT d = dc ? static_cast<UINT>(GetDeviceCaps(dc, LOGPIXELSX)) : 96u;
+    if (dc) ReleaseDC(nullptr, dc);
+    return d ? d : 96u;
+}
+
 } // namespace ui
