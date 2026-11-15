@@ -1,0 +1,105 @@
+# Publishes a GitHub release when the version in app/CMakeLists.txt changes on main.
+#
+# Bump `project(airplay_gui VERSION x.y.z)`, add installer/release-notes/vx.y.z.md, merge:
+# this builds the installer and runs scripts/publish-release.ps1, which tags vx.y.z and
+# uploads AirPlay-Setup-x.y.z.exe and its .sha256 - the release the in-app update check reads.
+# Nothing happens when that tag already exists. Actions -> release -> Run workflow does the
+# same by hand, optionally as a draft.
+name: release
+
+on:
+  push:
+    branches: [ main ]
+    paths: [ app/CMakeLists.txt ]
+  workflow_dispatch:
+    inputs:
+      draft:
+        description: Create the release as a draft (the update check ignores drafts)
+        type: boolean
+        default: false
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write   # create the tag and the release
+
+jobs:
+  release:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      # The checkout's persisted credentials are what `git push origin <tag>` uses later.
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0   # tags too: publish-release.ps1 refuses an existing tag
+
+      - name: Version and tag check
+        id: ver
+        shell: pwsh
+        run: |
+          $v = [regex]::Match((Get-Content app/CMakeLists.txt -Raw),
+                              'project\s*\(\s*airplay_gui\s+VERSION\s+([0-9]+\.[0-9]+\.[0-9]+)').Groups[1].Value
+          if (-not $v) { throw 'could not read VERSION out of app/CMakeLists.txt' }
+          $exists = [bool](git tag --list "v$v")
+          "version=$v" >> $env:GITHUB_OUTPUT
+          "exists=$($exists.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          Write-Host "version $v, tag exists: $exists"
+
+      # Same toolchain as build.yml.
+      - name: Set up MSYS2 (UCRT64)
+        if: steps.ver.outputs.exists == 'false'
+        id: msys2
+        # Pinned: this job holds a write token. Same commit as the v2 tag (v2.33.0).
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            git
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-openssl
+            mingw-w64-ucrt-x86_64-libplist
+            mingw-w64-ucrt-x86_64-gstreamer
+            mingw-w64-ucrt-x86_64-gst-plugins-base
+            mingw-w64-ucrt-x86_64-gst-plugins-good
+            mingw-w64-ucrt-x86_64-gst-plugins-bad
+            mingw-w64-ucrt-x86_64-gst-libav
+            mingw-w64-ucrt-x86_64-ntldd
+
+      - name: Build receiver and GUI
+        if: steps.ver.outputs.exists == 'false'
+        run: |
+          bash scripts/build.sh
+          bash scripts/build-app.sh
+          ctest --test-dir build-app --output-on-failure
+
+      - name: Install Inno Setup
+        if: steps.ver.outputs.exists == 'false'
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Package and publish
+        if: steps.ver.outputs.exists == 'false'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}   # gh in publish-release.ps1; only this step needs it
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          # publish-release.ps1 compares HEAD with @{u}; make sure the checkout has one.
+          git branch --set-upstream-to='origin/${{ github.ref_name }}'
+          # MSYS2 is not at C:\msys64 here; make-portable takes it as a parameter.
+          ./scripts/make-portable.ps1 -MsysRoot '${{ steps.msys2.outputs.msys2-location }}'
+          ./scripts/make-installer.ps1 -SkipPortable
+          $publishArgs = @{ SkipBuild = $true }
+          if ('${{ inputs.draft }}' -eq 'true') { $publishArgs.Draft = $true }
+          ./scripts/publish-release.ps1 @publishArgs
