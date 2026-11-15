@@ -156,6 +156,18 @@ void VideoWindow::setDevice(const std::wstring& model) {
     }
 }
 
+void VideoWindow::setSourceSize(SIZE size) {
+    if (!adopted_.valid() || size.cx <= 0 || size.cy <= 0) return;
+    if (size.cx == adopted_.source.cx && size.cy == adopted_.source.cy) return;
+    adopted_.source = size;
+    if (!hwnd_) return;
+    // Keep the window where the user has it; only its shape follows the new aspect.
+    saveRect();
+    sizeToSource();
+    layoutGuest();
+    InvalidateRect(hwnd_, nullptr, TRUE);
+}
+
 void VideoWindow::setFrameEnabled(bool on) {
     if (cfg_.deviceFrame == on) return;
     cfg_.deviceFrame = on;

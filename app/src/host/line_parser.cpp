@@ -364,7 +364,8 @@ ParsedLine parseUxplayLineDetailed(const std::string& rawIn) {
         return out;
     }
 
-    // --- mirrored resolution, lib/raop_rtp_mirror.c:608-609 (LOGGER_DEBUG => needs -d) -----------
+    // --- mirrored resolution: patches/0007 prints it at INFO on every stream format change, in the
+    //     words lib/raop_rtp_mirror.c:611 uses at DEBUG (so -d gives the line twice) ------------
     {
         const size_t at = t.find("raop_rtp_mirror width_source = ");
         if (at != std::string::npos) {

@@ -196,6 +196,20 @@ int wmain(int argc, wchar_t** argv) {
     check((g.right - g.left) > client.right, "the pillarbox is cropped, not letterboxed");
     check(rb.right - rb.left < (g.right - g.left), "the region is narrower than the guest");
 
+    // A mid-session format change (patches/0007 -> HostEvent::Resolution): the layout has to
+    // follow, or the sink letterboxes the new picture into the old shape and it shrinks.
+    // The test source keeps sending 16:9; only the layout's idea of it changes here.
+    video.setSourceSize(SIZE{720, 1560});   // the phone's own portrait aspect
+    pump(300);
+    GetClientRect(video.hwnd(), &client);
+    GetWindowRect(guest, &g);
+    check((g.right - g.left) <= client.right, "a portrait stream size is placed uncropped");
+    video.setSourceSize(SIZE{1280, 720});
+    pump(300);
+    GetClientRect(video.hwnd(), &client);
+    GetWindowRect(guest, &g);
+    check((g.right - g.left) > client.right, "back to 16:9: the pillarbox is cropped again");
+
     GetExitCodeProcess(pi.hProcess, &ec);
     check(ec == STILL_ACTIVE, "the receiver survived the region surgery too");
     pump(1500);

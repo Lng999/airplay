@@ -1142,7 +1142,10 @@ void MainWindow::onHostEvent(const airplay::HostEvent& ev) {
         }
 
         case K::Resolution: {
-            // Only ever seen with debug=true; it becomes a suffix on the hint line.
+            // Sent at the start of a stream and whenever the client changes its format
+            // (patches/0007); the picture is re-laid out to the new aspect. Also a suffix on
+            // the hint line.
+            video_.setSourceSize(SIZE{ev.width, ev.height});
             wchar_t b[64];
             _snwprintf(b, 64, L"%d×%d", ev.width, ev.height);
             resolutionText_ = b;

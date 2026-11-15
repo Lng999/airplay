@@ -25,7 +25,7 @@ enum class HostEventKind {
     LogLine,         // one raw stdout line (UTF-8), message field valid
     ClientInfo,      // client name/model/deviceid parsed (uxplay.cpp:2282)
     Ports,           // ports parsed (uxplay.cpp:3205): udp[3], tcp[3]
-    Resolution,      // only with debug=true: width/height parsed (lib/raop_rtp_mirror.c:608-609)
+    Resolution,      // width/height parsed; at every stream format change (patches/0007)
     Pin,             // pairing PIN block seen (uxplay.cpp:2196-2205); message = digits if parsed
     // One -FPSdata report from the client (lib/raop_rtp_mirror.c:807-811). srcWidth carries
     // submitSurfaceFPS: the number of frames the phone actually produced in the last second.
@@ -71,7 +71,7 @@ struct HostConfig {
     std::string  audioSink{"autoaudiosink"};    // -as
     bool fullscreen{false};          // -fs
     bool h265{false};                // -h265
-    bool debug{false};               // -d  (required for Resolution events; re-enables stdout buffering!)
+    bool debug{false};               // -d  (re-enables stdout buffering!)
     // Frame rate ceiling advertised to the client as the "maxFPS" plist item
     // (uxplay.cpp:1313-1320 -> :2752). UxPlay's own default is 30 (lib/raop.c:623), which the
     // iPhone obeys - it is the single biggest lever on how smooth mirroring looks.
