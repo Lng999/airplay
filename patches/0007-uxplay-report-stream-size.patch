@@ -1,0 +1,16 @@
+diff --git a/uxplay.cpp b/uxplay.cpp
+index 6946116..85a1b04 100644
+--- a/uxplay.cpp
++++ b/uxplay.cpp
+@@ -2964,6 +2964,11 @@ extern "C" void video_report_size(void *cls, float *width_source, float *height_
+     if (use_video) {
+         video_renderer_size(width_source, height_source, width, height);
+     }
++    /* Called again whenever the client changes the stream format mid-session, but the
++     * library reports it only at DEBUG level (lib/raop_rtp_mirror.c:611). A front-end hosting
++     * the video window has to re-lay it out, so say it at INFO, in the same words. */
++    LOGI("raop_rtp_mirror width_source = %f height_source = %f width = %f height = %f",
++         *width_source, *height_source, *width, *height);
+ }
+ 
+ extern "C" void audio_set_coverart(void *cls, const void *buffer, int buflen) {

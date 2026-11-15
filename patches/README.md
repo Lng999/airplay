@@ -12,6 +12,7 @@ clean checkout on every build.
 | `0003-uxplay-utf8-argv-manifest.patch` | A non-ASCII `-n <name>` is rejected on Windows: argv arrives in the ANSI code page. |
 | `0004-uxplay-report-mirror-idle.patch` | Hook: says within 400 ms that video frames stopped or resumed. |
 | `0005-uxplay-report-video-stats.patch` | Hook: reports the video bitrate and frame rate once a second. |
+| `0007-uxplay-report-stream-size.patch` | Hook: reports the stream size at INFO whenever the client changes the stream format. |
 
 `0002`–`0005` were regenerated against `4e95a9e` on 2026-10-17 (`git diff` per patch on top of
 the previous one). Only hunk positions and context moved; the added/removed lines are
@@ -138,6 +139,20 @@ mirror stats: 12480 kbps 59 fps
 Silent while no frames arrive (screen off), which `0004` already reports separately.
 `app/src/host/line_parser.cpp` turns the line into a `MirrorStats` event and the GUI puts
 `· 12.5 Mbps · 59 fps` on the status line.
+
+## `0007-uxplay-report-stream-size.patch` — the stream changes shape mid-session
+
+The client sends a new SPS/PPS, with the new image size, whenever the stream format changes
+(`third_party/UxPlay/lib/raop_rtp_mirror.c:354-361`), and the library passes the size to
+`video_report_size()` (`:609-610` -> `uxplay.cpp:2879`). Upstream only logs it at DEBUG
+(`lib/raop_rtp_mirror.c:611`, and `renderers/video_renderer.c:203`).
+
+The GUI adopts the sink's window once and lays the picture out for the size it had then.
+When the format changes, `d3d11videosink` letterboxes the new picture inside that old shape,
+so the phone screen shrinks into the middle of the window. The patch prints the same line at
+INFO from `video_report_size()`; `app/src/host/line_parser.cpp` already turns it into
+`HostEvent::Resolution`, and the picture window re-lays itself out for the new size. With
+`-d` the line appears twice, which is harmless.
 
 ## Applying
 
